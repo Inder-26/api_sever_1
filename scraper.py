@@ -1,4 +1,5 @@
 from playwright.async_api import async_playwright
+from playwright.sync_api import sync_playwright
 import time
 import random
 import asyncio
@@ -203,8 +204,8 @@ async def scrape_amazon_product_detail(page,product_partial: dict,detail_url = N
 
         html = await page.content()  # ← here's your HTML snapshot
 
-        with open("ec2_asin.html", "w", encoding="utf-8") as f:
-            f.write(html)
+        # with open("ec2_asin.html", "w", encoding="utf-8") as f:
+        #     f.write(html)
 
         title = "N/A"
         title_el = await page.query_selector("#productTitle")
@@ -544,8 +545,8 @@ async def get_new_asin_list(asin):
 
         html = await page.content()  # ← here's your HTML snapshot
 
-        with open("ec2_page.html", "w", encoding="utf-8") as f:
-            f.write(html)
+        # with open("ec2_page.html", "w", encoding="utf-8") as f:
+        #     f.write(html)
 
         # wait for the related-products carousel container to appear
         # adjust selector if Amazon changes its DOM

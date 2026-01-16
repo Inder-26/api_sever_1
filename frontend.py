@@ -7,7 +7,8 @@ def further_req(text, prompt):
     text += "\n"
     text += prompt
     text += "Give output formatted as json list where the columns will be the elements of the JSON. \nNo preambles or postambles i.e. the response should start with '[' and end with ']'\n"
-    response = requests.post("https://python-intern.onrender.com/further_req/", data={'prompt': text})
+    api_base_url = os.getenv("API_BASE_URL", "http://localhost:8000")
+    response = requests.post(f"{api_base_url}/further_req/", data={'prompt': text})
     return response.content
 
 # Streamlit UI
@@ -40,8 +41,9 @@ if submitted:
         data = {'prompt': prompt}
         
         # Send a POST request to FastAPI
-        response = requests.post("https://python-intern.onrender.com/process-image-and-prompt/", files=files, data=data)
-        r2 = requests.get("https://python-intern.onrender.com/download/")
+        api_base_url = os.getenv("API_BASE_URL", "http://localhost:8000")
+        response = requests.post(f"{api_base_url}/process-image-and-prompt/", files=files, data=data)
+        r2 = requests.get(f"{api_base_url}/download/")
         if response.status_code == 200:
             # Save the CSV file locally
             

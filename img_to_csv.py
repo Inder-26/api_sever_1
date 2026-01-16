@@ -6,9 +6,11 @@ import io
 import os
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+# from google.generativeai.types import HarmCategory, HarmBlockThreshold # Deprecated
 import json
-import google.generativeai as genai
+# import google.generativeai as genai_deprecated # keeping for compatibility during migration
+from google import genai
+from google.genai import types
 from typing import List,Dict,Any
 import requests
 import logging
@@ -53,9 +55,18 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-API_KEY = os.getenv("GOOGLE_API_KEY")
-genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel(model_name="gemini-2.0-flash")
+try:
+    API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("API_KEY")
+    if API_KEY:
+        # genai.configure(api_key=API_KEY)
+        # model = genai.GenerativeModel(model_name="gemini-2.0-flash")
+        client = genai.Client(api_key=API_KEY)
+    else:
+        print("Warning: GOOGLE_API_KEY not found. Gemini client not initialized.")
+        client = None
+except Exception as e:
+    print(f"Warning: Failed to initialize Gemini client: {e}")
+    client = None
 
 S3_BUCKET = os.getenv("S3_BUCKET", "alyaimg")
 GENERATED_FOLDER = "gen_images/"
@@ -63,12 +74,21 @@ GENERATED_FOLDER = "gen_images/"
 from image_search_engine import *
 
 # Load model and DB once
-clipmodel, processor, device = init_clip()
-collection_db = init_milvus(
-    host=os.getenv("MILVUS_HOST", "localhost"),
-    port=os.getenv("MILVUS_PORT", "19530"),
-    collection_name=os.getenv("COLLECTION_NAME", "image_embeddings")
-)
+try:
+    clipmodel, processor, device = init_clip()
+except Exception as e:
+    print(f"Warning: Failed to initialize CLIP model: {e}")
+    clipmodel, processor, device = None, None, None
+
+try:
+    collection_db = init_milvus(
+        host=os.getenv("MILVUS_HOST", "localhost"),
+        port=os.getenv("MILVUS_PORT", "19530"),
+        collection_name=os.getenv("COLLECTION_NAME", "image_embeddings")
+    )
+except Exception as e:
+    print(f"Warning: Failed to initialize Milvus connection: {e}")
+    collection_db = None
 
 
 gl=None
@@ -169,9 +189,14 @@ class RequestModel(BaseModel):
 
 # Initialize FastAPI app and ChromaDB
 
-client = chromadb.Client()
-collection_name = "jewelry_collection"
-collection = client.get_or_create_collection(name=collection_name)
+try:
+    client = chromadb.Client()
+    collection_name = "jewelry_collection"
+    collection = client.get_or_create_collection(name=collection_name)
+except Exception as e:
+    print(f"Warning: Failed to initialize ChromaDB: {e}")
+    client = None
+    collection = None
 
 # Load a sentence transformer for embedding generation
 # Lightweight semantic embedding model
@@ -191,11 +216,11 @@ async def semantic_filter_jewelry(data: InputData):
         combined_text = f"Description: {item['description']}. " \
                         f"Attributes: {item['attributes']}. " \
                         f"Color: {item['color']}."
-        result = genai.embed_content(
-        model="models/text-embedding-004",
-        content=combined_text
+        result = client.models.embed_content(
+        model="text-embedding-004",
+        contents=combined_text
     )
-        embedding = result['embedding']
+        embedding = result.embedding_values[0] # or check structure
       # Generate combined embedding
         collection.add(
             documents=[combined_text],
@@ -215,11 +240,11 @@ async def semantic_filter_jewelry(data: InputData):
                  f"Preferred Color: {data.user_needs.color}. " \
                  f"Additional Notes: {data.user_needs.manual_prompt}."
     # Generate embedding for the query
-    query_result = genai.embed_content(
-        model="models/text-embedding-004",
-        content=user_query
+    query_result = client.models.embed_content(
+        model="text-embedding-004",
+        contents=user_query
     )
-    query_embedding =query_result['embedding']
+    query_embedding = query_result.embedding_values[0]
     # Step 3: Perform semantic search in ChromaDB
     results = collection.query(
         query_embeddings=[query_embedding],
@@ -240,26 +265,34 @@ async def semantic_filter_jewelry(data: InputData):
     # except Exception as e:
     #     raise HTTPException(status_code=500, detail=f"Error deleting collection: {str(e)}")
     
-    response = model.generate_content(["Create an eye catching description for the following details of collection in 3-4 lines. This collection will be used for social media promotions :-\n"+user_query+"\n Return only the description, no preambles or postambles."],
-                                      safety_settings={
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-
-    }
+    response = client.models.generate_content(
+        model='gemini-2.0-flash',
+        contents=["Create an eye catching description for the following details of collection in 3-4 lines. This collection will be used for social media promotions :-\n"+user_query+"\n Return only the description, no preambles or postambles."],
+        config=types.GenerateContentConfig(
+            safety_settings= [
+                types.SafetySetting(category='HARM_CATEGORY_HATE_SPEECH', threshold='BLOCK_NONE'),
+                types.SafetySetting(category='HARM_CATEGORY_HARASSMENT', threshold='BLOCK_NONE'),
+                types.SafetySetting(category='HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold='BLOCK_NONE'),
+                types.SafetySetting(category='HARM_CATEGORY_DANGEROUS_CONTENT', threshold='BLOCK_NONE')
+            ]
+        )
     )
     print(response)
     # Get the response data from Gemini
     gemini_response = response.text
     print(gemini_response)
-    coll_title = model.generate_content([f"Create an eye-catching collection title for the following details. This collection will be used for social media promotions :-\n {user_query}\n Return only the  title. No preambles or postambles"],safety_settings={
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
-
-    }).text
+    coll_title = client.models.generate_content(
+        model='gemini-2.0-flash',
+        contents=[f"Create an eye-catching collection title for the following details. This collection will be used for social media promotions :-\n {user_query}\n Return only the  title. No preambles or postambles"],
+        config=types.GenerateContentConfig(
+            safety_settings= [
+                types.SafetySetting(category='HARM_CATEGORY_HATE_SPEECH', threshold='BLOCK_NONE'),
+                types.SafetySetting(category='HARM_CATEGORY_HARASSMENT', threshold='BLOCK_NONE'),
+                types.SafetySetting(category='HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold='BLOCK_NONE'),
+                types.SafetySetting(category='HARM_CATEGORY_DANGEROUS_CONTENT', threshold='BLOCK_NONE')
+            ]
+        )
+    ).text
     return {"top_jewelry_ids": top_jewelry_ids[0],
             "collection_description":gemini_response,
             "collection_title":coll_title
@@ -289,14 +322,32 @@ async def further_req(request:RequestModel):
 
     prompt=str(request.data)+"\n"+new_prompt+f"Only select the following keys: {request.columns}\n"+f"Select only those entries which follow: {request.manual}\nreturn the final response in json format. No preambles or postambles. Keep all strings in double quotes strictly"
 
-    response = model.generate_content([ prompt],
-                                      safety_settings={
-        HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
-        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+    if not client:
+        return {"error": "Google Client not initialized"}
 
-    }
+    response = client.models.generate_content(
+        model='gemini-2.0-flash',
+        contents=[prompt],
+        config=types.GenerateContentConfig(
+            safety_settings= [
+                types.SafetySetting(
+                    category='HARM_CATEGORY_HATE_SPEECH',
+                    threshold='BLOCK_NONE'
+                ),
+                types.SafetySetting(
+                    category='HARM_CATEGORY_HARASSMENT',
+                    threshold='BLOCK_NONE'
+                ),
+                types.SafetySetting(
+                    category='HARM_CATEGORY_SEXUALLY_EXPLICIT',
+                    threshold='BLOCK_NONE'
+                ),
+                types.SafetySetting(
+                    category='HARM_CATEGORY_DANGEROUS_CONTENT',
+                    threshold='BLOCK_NONE'
+                )
+            ]
+        )
     )
     print(response)
     # Get the response data from Gemini
@@ -357,12 +408,14 @@ Example structure (not actual values):
 ]
 
 """
-    # Save the uploaded image to a file
+    # Save the uploaded image to a temp file
     image_content = await image.read()
-    image_name = f"{uuid.uuid4()}_{image.filename}"
-    save_path = f"./{image_name}"
-    with open(save_path, "wb") as f:
-        f.write(image_content)
+    image_suffix = os.path.splitext(image.filename)[1]
+    
+    with tempfile.NamedTemporaryFile(delete=False, suffix=image_suffix) as tmp_file:
+        tmp_file.write(image_content)
+        save_path = tmp_file.name
+
     # Send the image and prompt to the Gemini API
     # sample_file = genai.upload_file(path=save_path,
     #                         display_name=image_name)
@@ -384,17 +437,35 @@ Example structure (not actual values):
     print(response)
     # Get the response idata from Gemini
     gemini_response = response
+    
+    if hasattr(gemini_response, "startswith") and gemini_response.startswith("Error"):
+        raise HTTPException(status_code=500, detail=f"Gemini API Error: {gemini_response}")
+
     if gemini_response[0]=="`":
         gemini_response=gemini_response[7:-3]
     print(gemini_response)
-    my_dict = json.loads(gemini_response)
+    try:
+        my_dict = json.loads(gemini_response)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail=f"Failed to parse Gemini response: {gemini_response}")
     extras=my_dict[-1]
-    os.remove(save_path)
+    try:
+        os.remove(save_path)
+    except OSError:
+        pass
     # Extract relevant data from the response (adjust based on your needs)
     to_return= {"table":my_dict[:-1],
             "extras":extras}
     manage_undo_file(to_return)
     return to_return
+
+
+@app.get("/download/")
+async def download_file():
+    file_path = "output_extra.csv"
+    if os.path.exists(file_path):
+        return FileResponse(file_path, media_type='text/csv', filename="output_extra.csv")
+    return {"error": "File not found"}
 
 
 
@@ -506,16 +577,21 @@ async def generate_caption(file: UploadFile = File(...),type: str = Form(...)):
             s3_url = matches[0]["path"]
         
 
-        # typ=json.loads(style)
-        image=file
-        image_name = image.filename
+        # image=file
+        # image_name = image.filename
         
-        # Create the path to save the file using the filename   
-        save_path = f"./{image_name}"
+        # # Create the path to save the file using the filename   
+        # save_path = f"./{image_name}"
         
-        # Save the uploaded image directly to the disk
-        with open(save_path, "wb") as f:
-            f.write(image_bytes)  # Write the image data to the file
+        # # Save the uploaded image directly to the disk
+        # with open(save_path, "wb") as f:
+        #     f.write(image_bytes)  # Write the image data to the file
+
+        image_name = file.filename
+        image_suffix = os.path.splitext(image_name)[1]
+        with tempfile.NamedTemporaryFile(delete=False, suffix=image_suffix) as tmp_file:
+            tmp_file.write(image_bytes)
+            save_path = tmp_file.name
 
         if not duplicate:
             try:
@@ -771,7 +847,11 @@ async def catalog_ai(req: CatalogRequest):
     :param req: A CatalogRequest object containing the image URLs and SKUs.
     :return: A JSON object containing the list of attributes and the URL to the Excel file.
     """
-    clear_excel_file(req.type,req.marketplace)
+    try:
+        clear_excel_file(req.type,req.marketplace)
+    except KeyError:
+        raise HTTPException(status_code=400, detail=f"Invalid marketplace '{req.marketplace}' or type '{req.type}'. Supported combinations must map to valid configurations.")
+
     format = req.marketplace.lower()[:3] + "_" + req.type.lower()[:3]
 
 
@@ -1594,10 +1674,13 @@ async def generate_images(request: ImageRequest):
                 filename = f"{name_no_ext}_prompt{i}.png"
                 key = f"{GENERATED_FOLDER}{filename}"
 
-                # Upload to S3
-                s3.put_object(Bucket=S3_BUCKET, Key=key, Body=resized_img_bytes, ContentType="image/png")
+                # Save locally instead of S3
+                local_path = os.path.join(GENERATED_FOLDER, filename)
+                with open(local_path, "wb") as f:
+                    f.write(resized_img_bytes)
 
-                image_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{key}"
+                # Return local URL or path
+                image_url = f"http://localhost:8000/{local_path.replace(os.sep, '/')}"
                 image_urls.append({
                     "prompt_index": i,
                     "image_url": image_url

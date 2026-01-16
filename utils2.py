@@ -29,13 +29,14 @@ client = OpenAI(
 
 API_KEYS = [
     os.getenv("GOOGLE_API_KEY"),
+    os.getenv("API_KEY"),  # Added fallback
     os.getenv("GOOGLE_API_KEY2"),
     os.getenv("GOOGLE_API_KEY3"),
     os.getenv("GOOGLE_API_KEY4"),
 ]
 
 #print(API_KEYS)
-clients = [genai.Client(api_key=key) for key in API_KEYS]
+clients = [genai.Client(api_key=key) for key in API_KEYS if key]
 client_cycle = itertools.cycle(clients)
 
 
@@ -212,22 +213,27 @@ def generate_images_from_gpt(
     all_responses = []
 
     for prompt in prompts:
-        result = client.images.generate(
-            model="gpt-image-1",
-            prompt=prompt,
-            size=size,
-            quality="low"
-        )
-
         structured_response = {
             "prompt": prompt,
             "text": "",
             "images": []
         }
+        try:
+            result = client.images.generate(
+                model="dall-e-3",
+                prompt=prompt,
+                size=size,
+                quality="standard",
+                n=1,
+                response_format="b64_json"
+            )
+            for img in result.data:
+                img_bytes = base64.b64decode(img.b64_json)
+                structured_response["images"].append(img_bytes)
 
-        for img in result.data:
-            img_bytes = base64.b64decode(img.b64_json)
-            structured_response["images"].append(img_bytes)
+        except Exception as e:
+            print(f"Error generating image: {e}")
+            structured_response["text"] = f"Error: {e}"
 
         all_responses.append(structured_response)
 

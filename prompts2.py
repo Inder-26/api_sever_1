@@ -1,356 +1,360 @@
+
+# COMMON STYLE TOKENS (Implied in text)
+# Lighting: "Professional soft studio lighting, sharp focus emphasizing jewelry details, subtle natural shadows, polished and premium aesthetic."
+# Atmosphere: "Clean, crisp, minimalistic, luxury e-commerce presentation."
+
 white_bgd_prompt = """
-you are provide with
-Earrings image (use this to extract the jewelry design the design shoulb be preserved 100% no changes should be there).
+You are provided with an Earrings image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
-"Create a high-resolution, hyper-realistic image of an elegant earrings (both left and right earrings fully visible), precisely based on the provided reference image.
+Create a high-resolution, hyper-realistic image of elegant earrings (both left and right fully visible), precisely based on the provided reference image.
 
-Preserve exactly: design details, colors, textures, and proportions.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Background: pure white, seamless studio backdrop.
+Background: Pure white (#ffffff), seamless studio backdrop.
 
-Lighting & Style: professional-grade studio lighting, sharp focus emphasizing jewelry details, soft natural shadows, polished and premium aesthetic.
+Lighting & Style: Professional soft studio lighting, sharp focus emphasizing jewelry details, subtle natural shadows, polished and premium aesthetic.
 
-Surface Details: realistic metal reflections, accurate gemstone clarity, no distortions or artifacts.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, no distortions or artifacts.
 
-Overall Atmosphere: clean, crisp, minimalistic, luxury e-commerce presentation.
+Overall Atmosphere: Clean, crisp, minimalistic, luxury e-commerce presentation.
 
-Strictly avoid: blurry textures, cartoon-like rendering, unrealistic reflections, overexposure, or added graphic elements.
+Strictly avoid: Blurry textures, cartoon-like rendering, unrealistic reflections, overexposure, or added graphic elements.
 
-Output: generate only the final polished image, without any additional text, captions, or descriptions.
-negative prompt - dont change the design of the bracelet each detail should remain same
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
+
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
 
 multicolor_1_prompt = """
-you are provide with
-Earrings image (use this to extract the jewelry design the design shoulb be preserved 100% no changes should be there).
-A high-resolution, hyper-realistic image of an elegant earrings (both left and right visible) based on the provided reference image.
+You are provided with an Earrings image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
-The earrings should retain their exact design, color, texture, and proportions.
+Create a high-resolution, hyper-realistic image of elegant earrings (both left and right fully visible), precisely based on the provided reference image.
 
-Background: Generate a dynamic, multi-color complementary background uniquely tailored to the natural hues and materials of the earrings. Use soft blended gradients, iridescent overlays, or gentle color transitions that incorporate 2–3 harmonious colors inspired by the metal, gemstones, or enamel in the earrings. For example, pastel blends with metallic hints, blurred floral tones, or shimmering marble with gold flecks. Avoid repetition; ensure each background is distinct and elevates the elegance of the design without overpowering it.
-Style: Professional soft lighting, sharp focus on jewelry details, subtle natural shadows.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Details: Accurate material texture, gemstone clarity, no distortions, clean and elegant background contrast.
+Background: Soft pastel gradient (pastel pink, lavender, ivory, or marble texture) tailored to the earrings' natural hues.
 
-Atmosphere: luxurious, gentle, Instagram-worthy, sophisticated.
+Lighting & Style: Professional soft studio lighting, sharp focus emphasizing jewelry details, subtle natural shadows, polished and premium aesthetic.
 
-Avoid: distracting backgrounds, harsh lighting, unrealistic colors.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, no distortions or artifacts.
 
-Generate only the final image, no additional text or explanation.
-negative prompt - dont change the design of the bracelet each detail should remain same
+Overall Atmosphere: Luxurious, gentle, Instagram-worthy, sophisticated.
+
+Strictly avoid: Blurry textures, cartoon-like rendering, unrealistic reflections, overexposure, or added graphic elements.
+
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
+
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
 
 multicolor_2_prompt = """
-you are provide with
-Earrings image (use this to extract the jewelry design the design shoulb be preserved 100% no changes should be there).
+You are provided with an Earrings image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
-A high-resolution, hyper-realistic image of an elegant earrings (both left and right visible) based on the provided reference image.
+Create a high-resolution, hyper-realistic image of elegant earrings (both left and right fully visible), precisely based on the provided reference image.
 
-The earrings should retain their exact design, color, texture, and proportions.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Background: choose a *dynamic, multi-color complementary* backdrop that is visually distinct from the first. Use refined blends of 2–3 hues inspired by the earrings’ materials—such as warm golds with muted rose, sapphire blues with soft greys, or emerald greens merging into champagne beige. Incorporate high-end effects like artistic bokeh with tinted highlights, luxurious marble gradients with metallic flecks, or soft studio-style color transitions. The background must enhance the metal and gemstone elements while maintaining a clean, editorial aesthetic. Every image should feature a unique, thoughtfully designed background.
+Background: Rich textured background (muted teal, matte beige, velvet black, or soft gold) providing elegant contrast.
 
-Style: Studio-quality deep lighting, sharp focus on jewelry details, realistic reflections and shadows.
+Lighting & Style: Professional soft studio lighting, sharp focus emphasizing jewelry details, subtle natural shadows, polished and premium aesthetic.
 
-Details: True-to-life gemstone and metal textures, centered composition, luxurious feel.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, no distortions or artifacts.
 
-Atmosphere: premium, editorial, artistic, moody luxury.
+Overall Atmosphere: Premium, editorial, artistic, moody luxury.
 
-Avoid: cluttered backgrounds, low resolution, distortion.
+Strictly avoid: Blurry textures, cartoon-like rendering, unrealistic reflections, overexposure, or added graphic elements.
 
-Generate only the final image, no additional text or explanation.
-negative prompt - dont change the design of the bracelet each detail should remain same
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
+
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
 
 props_img_prompt = """
-you are provide with
-Earrings image (use this to extract the jewelry design the design shoulb be preserved 100% no changes should be there).
+You are provided with an Earrings image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
-A high-resolution, hyper-realistic flat lay image of a pair of elegant earrings (left and right visible) based on the provided reference image.
+Create a high-resolution, hyper-realistic flat lay image of elegant earrings (both left and right fully visible), precisely based on the provided reference image.
 
-The earrings should retain their exact design, color, texture, and proportions.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Background: satin fabric, soft velvet, marble, or handmade paper surface with minimal elegant props (dried flowers, soft petals, small stones, fabric folds) dont add too many props.
+Background: Satin fabric, soft velvet, marble, or handmade paper surface with minimal elegant props (dried flowers, soft petals, small stones, fabric folds). Do not add too many props.
 
-Style: Luxurious flat lay photography, soft diffused lighting, shallow depth of field focusing on jewelry.
+Lighting & Style: Professional soft studio lighting, sharp focus emphasizing jewelry details, subtle natural shadows, polished and premium aesthetic.
 
-Details: Crisp textures, true-to-life metal shine and stone brilliance, balanced spacing.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, no distortions or artifacts.
 
-Atmosphere: luxurious, Instagram-worthy, sophisticated, aesthetic.
+Overall Atmosphere: Luxurious, Instagram-worthy, sophisticated, aesthetic.
 
-Avoid: overpowering props, busy composition, loss of jewelry focus.
+Strictly avoid: Overpowering props, busy composition, blurry textures, cartoon-like rendering.
 
-Generate only the final image, no additional text or explanation.
-negative prompt - dont change the design of the bracelet each detail should remain same
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
+
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
-
 
 hand_prompt = """
-you are provide with
-Earrings image (use this to extract the jewelry design the design shoulb be preserved 100% no changes should be there).
-Create a high-resolution, hyper-realistic image of a pair of elegant earrings (both left and right earrings clearly visible), precisely based on the provided reference image.
+You are provided with an Earrings image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
-Preserve exactly: design, colors, textures, and proportions of the earrings.
+Create a high-resolution, hyper-realistic image of elegant earrings (both left and right fully visible), precisely based on the provided reference image.
 
-Background: neutral beige or ivory tone. The earrings should rest naturally on an open, well-manicured human hand with the palm facing upward.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Lighting & Style: natural soft lighting, sharp focus highlighting both jewelry and realistic skin textures.
+Background: Neutral beige or ivory tone. The earrings should rest naturally on an open, well-manicured human hand with the palm facing upward.
 
-Surface Details: correct scale, crisp gemstone clarity, natural skin pores subtly visible, gentle natural shadows enhancing depth.
+Lighting & Style: Professional soft studio lighting, sharp focus emphasizing both jewelry and realistic skin textures, subtle natural shadows.
 
-Atmosphere: warm, organic, luxurious, and natural feel.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, natural skin pores subtly visible.
 
-Strictly avoid: unrealistic or stiff hand poses, over-edited skin, harsh or artificial lighting, excessive retouching.
+Overall Atmosphere: Warm, organic, luxurious, and natural feel.
 
-Output: generate only the final polished image without any additional text, annotations, or explanations.
-negative prompt - dont change the design of the bracelet each detail should remain same
+Strictly avoid: Unrealistic or stiff hand poses, over-edited skin, harsh or artificial lighting, cartoon-like rendering.
+
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
+
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
 
+# ----------------- BRACELETS -----------------
 
 white_bgd_bracelet_prompt = """
-    Create a high-resolution, hyper-realistic image of an elegant bracelet, fully visible and centered, precisely based on the provided reference image.
+You are provided with a Bracelet image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
-Preserve exactly: design details, colors, textures, and proportions.
+Create a high-resolution, hyper-realistic image of an elegant bracelet (fully visible and centered), precisely based on the provided reference image.
 
-Background: pure white, seamless studio backdrop.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Lighting & Style: professional-grade studio lighting, sharp focus emphasizing jewelry details, soft natural shadows, polished and premium aesthetic.
+Background: Pure white (#ffffff), seamless studio backdrop.
 
-Surface Details: realistic metal reflections, accurate gemstone clarity, no distortions or artifacts.
+Lighting & Style: Professional soft studio lighting, sharp focus emphasizing jewelry details, subtle natural shadows, polished and premium aesthetic.
 
-Overall Atmosphere: clean, crisp, minimalistic, luxury e-commerce presentation.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, no distortions or artifacts.
 
-Strictly avoid: blurry textures, cartoon-like rendering, unrealistic reflections, overexposure, or added graphic elements.
+Overall Atmosphere: Clean, crisp, minimalistic, luxury e-commerce presentation.
 
-Output: generate only the final polished image, without any additional text, captions, or descriptions.
-negative prompt - dont change the design of the bracelet each detail should remain same
+Strictly avoid: Blurry textures, cartoon-like rendering, unrealistic reflections, overexposure, or added graphic elements.
+
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
+
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
 
 multicolor_1_bracelet_prompt = """
-you are provided with
-Bracelet image (use this to extract the jewelry design—the design should be preserved 100% with no changes).
+You are provided with a Bracelet image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
-A high-resolution, hyper-realistic image of an elegant bracelet (fully visible and centered) based on the provided reference image.
+Create a high-resolution, hyper-realistic image of an elegant bracelet (fully visible and centered), precisely based on the provided reference image.
 
-The bracelet should retain its exact design, color, texture, and proportions.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Background: soft pastel gradient (pastel pink, lavender, ivory, or marble texture) enhancing the jewelry colors.
+Background: Soft pastel gradient (pastel pink, lavender, ivory, or marble texture) tailored to the bracelet's natural hues.
 
-Style: professional soft lighting, sharp focus on jewelry details, subtle natural shadows.
+Lighting & Style: Professional soft studio lighting, sharp focus emphasizing jewelry details, subtle natural shadows, polished and premium aesthetic.
 
-Details: accurate material texture, gemstone clarity, no distortions, clean and elegant background contrast.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, no distortions or artifacts.
 
-Atmosphere: luxurious, gentle, Instagram-worthy, sophisticated.
+Overall Atmosphere: Luxurious, gentle, Instagram-worthy, sophisticated.
 
-Avoid: distracting backgrounds, harsh lighting, unrealistic colors.
+Strictly avoid: Blurry textures, cartoon-like rendering, unrealistic reflections, overexposure, or added graphic elements.
 
-Generate only the final polished image, with no additional text or explanation.
-negative prompt - dont change the design of the bracelet each detail should remain same
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
+
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
-
 
 multicolor_2_bracelet_prompt = """
-you are provided with
-Bracelet image (use this to extract the jewelry design—the design should be preserved 100% with no changes).
+You are provided with a Bracelet image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
-A high-resolution, hyper-realistic image of an elegant bracelet (fully visible and centered) based on the provided reference image.
+Create a high-resolution, hyper-realistic image of an elegant bracelet (fully visible and centered), precisely based on the provided reference image.
 
-The bracelet should retain its exact design, color, texture, and proportions.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Background: rich textured background (muted teal, matte beige, velvet black, or soft gold) providing elegant contrast.
+Background: Rich textured background (muted teal, matte beige, velvet black, or soft gold) providing elegant contrast.
 
-Style: studio-quality deep lighting, sharp focus on jewelry details, realistic reflections and shadows.
+Lighting & Style: Professional soft studio lighting, sharp focus emphasizing jewelry details, subtle natural shadows, polished and premium aesthetic.
 
-Details: true-to-life gemstone and metal textures, centered composition, luxurious feel.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, no distortions or artifacts.
 
-Atmosphere: premium, editorial, artistic, moody luxury.
+Overall Atmosphere: Premium, editorial, artistic, moody luxury.
 
-Avoid: cluttered backgrounds, low resolution, distortion.
+Strictly avoid: Blurry textures, cartoon-like rendering, unrealistic reflections, overexposure, or added graphic elements.
 
-Generate only the final polished image, with no additional text or explanation.
-negative prompt - dont change the design of the bracelet each detail should remain same
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
+
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
-
 
 props_img_bracelet_prompt = """
-you are provided with
-Bracelet image (use this to extract the jewelry design—the design should be preserved 100% with no changes).
+You are provided with a Bracelet image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
-A high-resolution, hyper-realistic flat lay image of an elegant bracelet (fully visible) based on the provided reference image.
+Create a high-resolution, hyper-realistic flat lay image of an elegant bracelet (fully visible), precisely based on the provided reference image.
 
-The bracelet should retain its exact design, color, texture, and proportions.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Background: satin fabric, soft velvet, marble, or handmade paper surface with minimal elegant props (dried flowers, soft petals, small stones, fabric folds) dont add too many props.
+Background: Satin fabric, soft velvet, marble, or handmade paper surface with minimal elegant props (dried flowers, soft petals, small stones, fabric folds). Do not add too many props.
 
-Style: luxurious flat lay photography, soft diffused lighting, shallow depth of field focusing on the jewelry.
+Lighting & Style: Professional soft studio lighting, sharp focus emphasizing jewelry details, subtle natural shadows, polished and premium aesthetic.
 
-Details: crisp textures, true-to-life metal shine and stone brilliance, balanced spacing.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, no distortions or artifacts.
 
-Atmosphere: luxurious, Instagram-worthy, sophisticated, aesthetic.
+Overall Atmosphere: Luxurious, Instagram-worthy, sophisticated, aesthetic.
 
-Avoid: overpowering props, busy composition, loss of jewelry focus.
+Strictly avoid: Overpowering props, busy composition, blurry textures, cartoon-like rendering.
 
-Generate only the final polished image, with no additional text or explanation
-negative prompt - dont change the design of the bracelet each detail should remain same
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
 
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
 
-
 hand_bracelet_prompt = """
-you are provided with
-Bracelet image (use this to extract the jewelry design—the design should be preserved 100% with no changes).
+You are provided with a Bracelet image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
 Create a high-resolution, hyper-realistic image of an elegant bracelet, precisely based on the provided reference image.
 
-Preserve exactly: design, colors, textures, and proportions of the bracelet.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Background: neutral beige or ivory tone. The bracelet should be draped naturally around a well-manicured wrist on an open hand.
+Background: Neutral beige or ivory tone. The bracelet should be draped naturally around a well-manicured wrist on an open hand.
 
-Lighting & Style: natural soft lighting, sharp focus highlighting both jewelry and realistic skin textures.
+Lighting & Style: Professional soft studio lighting, sharp focus highlighting both jewelry and realistic skin textures, subtle natural shadows.
 
-Surface Details: correct scale, crisp metal and gemstone clarity, natural skin pores subtly visible, gentle natural shadows enhancing depth.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, natural skin pores subtly visible.
 
-Atmosphere: warm, organic, luxurious, and natural feel.
+Overall Atmosphere: Warm, organic, luxurious, and natural feel.
 
-Strictly avoid: unrealistic or stiff poses, over-edited skin, harsh or artificial lighting, excessive retouching.
+Strictly avoid: Unrealistic or stiff hand poses, over-edited skin, harsh or artificial lighting, cartoon-like rendering.
 
-Output: generate only the final polished image without any additional text, annotations, or explanations.
-negative prompt - dont change the design of the bracelet each detail should remain same
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
+
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
 
-
+# ----------------- NECKLACES -----------------
 
 white_bgd_necklace_prompt = """
-you are provided with
-Necklace image (use this to extract the jewelry design—the design should be preserved 100% with no changes).
+You are provided with a Necklace image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
 Create a high-resolution, hyper-realistic image of an elegant necklace (fully visible, including clasp and chain), precisely based on the provided reference image.
 
-Preserve exactly: design details, colors, textures, and proportions.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Background: pure white (#ffffff), seamless studio backdrop.
+Background: Pure white (#ffffff), seamless studio backdrop.
 
-Lighting & Style: professional-grade studio lighting, sharp focus emphasizing jewelry details, soft natural shadows, polished and premium aesthetic.
+Lighting & Style: Professional soft studio lighting, sharp focus emphasizing jewelry details, subtle natural shadows, polished and premium aesthetic.
 
-Surface Details: realistic metal reflections, accurate gemstone clarity, no distortions or artifacts.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, no distortions or artifacts.
 
-Overall Atmosphere: clean, crisp, minimalistic, luxury e-commerce presentation.
+Overall Atmosphere: Clean, crisp, minimalistic, luxury e-commerce presentation.
 
-Strictly avoid: blurry textures, cartoon-like rendering, unrealistic reflections, overexposure, or added graphic elements.
+Strictly avoid: Blurry textures, cartoon-like rendering, unrealistic reflections, overexposure, or added graphic elements.
 
-Output: generate only the final polished image, without any additional text, captions, or descriptions.
-negative prompt - dont change the design of the bracelet each detail should remain same
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
+
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
-
 
 multicolor_1_necklace_prompt = """
-you are provided with
-Necklace image (use this to extract the jewelry design—the design should be preserved 100% with no changes).
+You are provided with a Necklace image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
-A high-resolution, hyper-realistic image of an elegant necklace (fully visible, including clasp and chain) based on the provided reference image.
+Create a high-resolution, hyper-realistic image of an elegant necklace (fully visible, including clasp and chain), precisely based on the provided reference image.
 
-The necklace should retain its exact design, color, texture, and proportions.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Background: soft pastel gradient (pastel pink, lavender, ivory, or marble texture) enhancing jewelry colors.
+Background: Soft pastel gradient (pastel pink, lavender, ivory, or marble texture) tailored to the necklace's natural hues.
 
-Style: professional soft lighting, sharp focus on jewelry details, subtle natural shadows.
+Lighting & Style: Professional soft studio lighting, sharp focus emphasizing jewelry details, subtle natural shadows, polished and premium aesthetic.
 
-Details: accurate material texture, gemstone clarity, no distortions, clean and elegant background contrast.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, no distortions or artifacts.
 
-Atmosphere: luxurious, gentle, Instagram-worthy, sophisticated.
+Overall Atmosphere: Luxurious, gentle, Instagram-worthy, sophisticated.
 
-Avoid: distracting backgrounds, harsh lighting, unrealistic colors.
+Strictly avoid: Blurry textures, cartoon-like rendering, unrealistic reflections, overexposure, or added graphic elements.
 
-Generate only the final polished image, with no additional text or explanation.
-negative prompt - dont change the design of the bracelet each detail should remain same
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
+
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
-
 
 multicolor_2_necklace_prompt = """
-you are provided with
-Necklace image (use this to extract the jewelry design—the design should be preserved 100% with no changes).
+You are provided with a Necklace image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
-A high-resolution, hyper-realistic image of an elegant necklace (fully visible, including clasp and chain) based on the provided reference image.
+Create a high-resolution, hyper-realistic image of an elegant necklace (fully visible, including clasp and chain), precisely based on the provided reference image.
 
-The necklace should retain its exact design, color, texture, and proportions.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Background: rich textured background (muted teal, matte beige, velvet black, or soft gold) providing elegant contrast.
+Background: Rich textured background (muted teal, matte beige, velvet black, or soft gold) providing elegant contrast.
 
-Style: studio-quality deep lighting, sharp focus on jewelry details, realistic reflections and shadows.
+Lighting & Style: Professional soft studio lighting, sharp focus emphasizing jewelry details, subtle natural shadows, polished and premium aesthetic.
 
-Details: true-to-life gemstone and metal textures, centered composition, luxurious feel.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, no distortions or artifacts.
 
-Atmosphere: premium, editorial, artistic, moody luxury.
+Overall Atmosphere: Premium, editorial, artistic, moody luxury.
 
-Avoid: cluttered backgrounds, low resolution, distortion.
+Strictly avoid: Blurry textures, cartoon-like rendering, unrealistic reflections, overexposure, or added graphic elements.
 
-Generate only the final polished image, with no additional text or explanation.
-negative prompt - dont change the design of the bracelet each detail should remain same
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
+
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
 
-
 props_img_necklace_prompt = """
-you are provided with
-Necklace image (use this to extract the jewelry design—the design should be preserved 100% with no changes).
+You are provided with a Necklace image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
-A high-resolution, hyper-realistic flat lay image of an elegant necklace (fully visible, including clasp and chain) based on the provided reference image.
+Create a high-resolution, hyper-realistic flat lay image of an elegant necklace (fully visible, including clasp and chain), precisely based on the provided reference image.
 
-The necklace should retain its exact design, color, texture, and proportions.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Background: satin fabric, soft velvet, marble, or handmade paper surface with minimal elegant props (dried flowers, soft petals, small stones, fabric folds) dont add too many props.
+Background: Satin fabric, soft velvet, marble, or handmade paper surface with minimal elegant props (dried flowers, soft petals, small stones, fabric folds). Do not add too many props.
 
-Style: luxurious flat lay photography, soft diffused lighting, shallow depth of field focusing on the jewelry.
+Lighting & Style: Professional soft studio lighting, sharp focus emphasizing jewelry details, subtle natural shadows, polished and premium aesthetic.
 
-Details: crisp textures, true-to-life metal shine and gemstone brilliance, balanced spacing.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, no distortions or artifacts.
 
-Atmosphere: luxurious, Instagram-worthy, sophisticated, aesthetic.
+Overall Atmosphere: Luxurious, Instagram-worthy, sophisticated, aesthetic.
 
-Avoid: overpowering props, busy composition, loss of jewelry focus.
+Strictly avoid: Overpowering props, busy composition, blurry textures, cartoon-like rendering.
 
-Generate only the final polished image, with no additional text or explanation.
-negative prompt - dont change the design of the bracelet each detail should remain same
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
+
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
 
 hand_necklace_prompt = """
-you are provided with
-Necklace image (use this to extract the jewelry design—the design should be preserved 100% with no changes).
+You are provided with a Necklace image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
 Create a high-resolution, hyper-realistic image of an elegant necklace, precisely based on the provided reference image.
 
-Preserve exactly: design, colors, textures, and proportions of the necklace.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Background: neutral beige or ivory tone. The necklace should rest naturally draped over an open hand.
+Background: Neutral beige or ivory tone. The necklace should rest naturally draped over an open hand.
 
-Lighting & Style: natural soft lighting, sharp focus highlighting both jewelry and realistic skin or fabric textures.
+Lighting & Style: Professional soft studio lighting, sharp focus highlighting both jewelry and realistic skin textures, subtle natural shadows.
 
-Surface Details: correct scale, crisp metal and gemstone clarity, gentle natural shadows enhancing depth.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, natural skin pores subtly visible.
 
-Atmosphere: warm, organic, luxurious, and natural feel.
+Overall Atmosphere: Warm, organic, luxurious, and natural feel.
 
-Strictly avoid: unrealistic or stiff poses, over-edited skin or fabric, harsh or artificial lighting, excessive retouching.
+Strictly avoid: Unrealistic or stiff poses, over-edited skin, harsh or artificial lighting, cartoon-like rendering.
 
-Output: generate only the final polished image without any additional text, annotations, or explanations.
-negative prompt - dont change the design of the bracelet each detail should remain same
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
+
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
 
 neck_necklace_prompt = """
-you are provided with
-Necklace image (use this to extract the jewelry design—the design should be preserved 100% with no changes).
+You are provided with a Necklace image. Use this to extract the jewelry design—the design MUST be preserved 100% with no changes.
 
 Create a high-resolution, hyper-realistic image of an elegant necklace, precisely based on the provided reference image.
 
-Preserve exactly: design, colors, textures, and proportions of the necklace.
+Preserve exactly: Design details, colors, textures, and proportions.
 
-Background: neutral beige or ivory tone. The necklace should rest naturally around a well-manicured neck.
+Background: Neutral beige or ivory tone. The necklace should rest naturally around a well-manicured neck.
 
-Lighting & Style: natural soft lighting, sharp focus highlighting both jewelry and realistic skin or fabric textures.
+Lighting & Style: Professional soft studio lighting, sharp focus highlighting both jewelry and realistic skin textures, subtle natural shadows.
 
-Surface Details: correct scale, crisp metal and gemstone clarity, gentle natural shadows enhancing depth.
+Surface Details: Realistic metal reflections, accurate gemstone clarity, natural skin pores subtly visible.
 
-Atmosphere: warm, organic, luxurious, and natural feel.
+Overall Atmosphere: Warm, organic, luxurious, and natural feel.
 
-Strictly avoid: unrealistic or stiff poses, over-edited skin or fabric, harsh or artificial lighting, excessive retouching.
+Strictly avoid: Unrealistic or stiff poses, over-edited skin, harsh or artificial lighting, cartoon-like rendering.
 
-Output: generate only the final polished image without any additional text, annotations, or explanations.
-negative prompt - dont change the design of the bracelet each detail should remain same
+Output: Generate only the final polished image, without any additional text, captions, or descriptions.
+
+Negative Prompt: IMPORTANT: The design must be preserved 100%. Do not hallucinate new details. Do not change the design.
 """
