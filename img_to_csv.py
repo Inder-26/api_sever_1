@@ -563,7 +563,7 @@ async def generate_caption(file: UploadFile = File(...),type: str = Form(...)):
         for _id, dist in results:
             print(dist)
             print()
-            if 100 - dist >= 95:
+            if dist <= 0.3:  # CLIP L2 distance threshold for duplicate detection
                 path = id_to_path.get(str(_id), "unknown")
                 matches.append({"id": _id, "distance": dist, "path": path})
 
@@ -816,7 +816,7 @@ async def image_searh(file: UploadFile = File(...), top_k: int = 1):
     # Step 5: Build response
     matches = []
     for _id, dist in results:
-        if 100 - dist >= 90:
+        if dist <= 0.3:  # CLIP L2 distance threshold for similarity search
             path = id_to_path.get(str(_id), "unknown")
             matches.append({"id": _id, "distance": dist, "path": path})
 
