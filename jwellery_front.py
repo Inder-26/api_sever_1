@@ -34,19 +34,37 @@ if st.session_state.images:
 # Button to generate captions
 if st.button("Generate Captions"):
     if st.session_state.images:
-        # Prepare images for the request (limited to 100 images)
-        files = [('files', (img.name, img, img.type)) for img in st.session_state.images]
-        # Send POST request to FastAPI to generate captions
-        response = requests.post(GENERATE_CAPTION_URL, files=files)
+        all_results = []
+        progress_bar = st.progress(0)
+        
+        for idx, img in enumerate(st.session_state.images):
+            # Reset pointer to ensured read from start if needed, though streamlit uploads are handled differently
+            # img.seek(0) 
+            
+            # Prepare payload for single image
+            files = {'file': (img.name, img, img.type)}
+            data = {'type': jewellery_type}
+            
+            try:
+                response = requests.post(GENERATE_CAPTION_URL, files=files, data=data)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    all_results.append(result)
+                else:
+                    st.error(f"Error processing {img.name}: {response.text}")
+            except Exception as e:
+                st.error(f"Failed to connect for {img.name}: {str(e)}")
+            
+            progress_bar.progress((idx + 1) / len(st.session_state.images))
 
-        if response.status_code == 200:
+        if all_results:
             output_file = "output.csv"
-            with open(output_file, "wb") as f:
-                f.write(response.content)
+            df = pd.DataFrame(all_results)
+            df.to_csv(output_file, index=False)
 
             # Store response and DataFrame in session state
-            st.session_state.response = response
-            st.session_state.df = pd.read_csv(output_file)
+            st.session_state.df = df
             st.table(st.session_state.df)
 
             # Provide a download button for the user to download the CSV
@@ -54,11 +72,10 @@ if st.button("Generate Captions"):
                 st.download_button("Download CSV", f, file_name="gemini_output.csv", mime="text/csv")
             
             # Optionally clean up the file after download
-            os.remove(output_file)
-        else:
-            st.error("Error generating captions.")
+            if os.path.exists(output_file):
+                os.remove(output_file)
     else:
-        st.error("Please upload images and enter a User ID.")
+        st.error("Please upload images.")
 
 
 

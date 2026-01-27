@@ -225,10 +225,13 @@ def generate_images_from_gpt(
                 size=size,
                 quality="standard",
                 n=1,
-                response_format="b64_json"
+                # response_format="b64_json" 
             )
             for img in result.data:
-                img_bytes = base64.b64decode(img.b64_json)
+                # img_bytes = base64.b64decode(img.b64_json)
+                import requests
+                img_url = img.url
+                img_bytes = requests.get(img_url).content
                 structured_response["images"].append(img_bytes)
 
         except Exception as e:
