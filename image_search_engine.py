@@ -337,7 +337,7 @@ def embed_image(img: Image.Image, model, processor, device) -> np.ndarray:
     inputs = processor(images=img, return_tensors="pt").to(device)
     with torch.no_grad():
         features = model.get_image_features(**inputs)
-    return features.cpu().numpy().reshape(-1)
+    return features.pooler_output.cpu().numpy().reshape(-1)
 
 # ------------------------ Connect to Milvus ------------------------
 def init_milvus(host: str, port: str, collection_name: str, dim: int = 512):
