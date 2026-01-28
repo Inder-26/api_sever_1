@@ -441,14 +441,21 @@ Example structure (not actual values):
     if hasattr(gemini_response, "startswith") and gemini_response.startswith("Error"):
         raise HTTPException(status_code=500, detail=f"Gemini API Error: {gemini_response}")
 
-    if gemini_response[0]=="`":
+    if gemini_response and gemini_response[0]=="`":
         gemini_response=gemini_response[7:-3]
     print(gemini_response)
     try:
         my_dict = json.loads(gemini_response)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail=f"Failed to parse Gemini response: {gemini_response}")
-    extras=my_dict[-1]
+    except json.JSONDecodeError as e:
+        # If Gemini returns plain text (not JSON), return empty array
+        print(f"Warning: Gemini response is not valid JSON: {gemini_response[:100]}")
+        my_dict = [{}]  # Return empty object as fallback
+    
+    # Ensure my_dict is a list with at least one element
+    if not isinstance(my_dict, list) or len(my_dict) == 0:
+        my_dict = [{}]
+    
+    extras = my_dict[-1] if len(my_dict) > 0 else {}
     try:
         os.remove(save_path)
     except OSError:
