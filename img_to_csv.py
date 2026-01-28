@@ -603,8 +603,9 @@ async def generate_caption(file: UploadFile = File(...),type: str = Form(...)):
         if not duplicate:
             try:
                 timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
-                unique_id = uuid.uuid4().hex[:8]
-                unique_name = f"{timestamp}_{unique_id}_{image_name}"
+                # Use only timestamp + extension for clean filename
+                image_extension = os.path.splitext(image_name)[1]  # e.g., ".jpeg"
+                unique_name = f"{timestamp}{image_extension}"
                 
                 s3.upload_file(
                     Filename=save_path,
@@ -613,9 +614,8 @@ async def generate_caption(file: UploadFile = File(...),type: str = Form(...)):
                     ExtraArgs={"ContentType": "image/jpeg"}
                 )
                 index_single_image_from_s3(collection_db, unique_name, clipmodel, processor, device)
-                # URL-encode the key to ensure consistent URL format with %20 instead of spaces
-                from urllib.parse import quote
-                s3_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{quote(unique_name)}"
+                # No URL encoding needed since filename contains no spaces
+                s3_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{unique_name}"
             except Exception as e:
                 return JSONResponse(status_code=500, content={"error": f"Failed to upload to S3: {str(e)}"})
         
@@ -1613,8 +1613,7 @@ def create_zip_from_s3_urls(image_urls, zip_filename):
     s3.upload_fileobj(zip_buffer, S3_BUCKET, s3_key, ExtraArgs={"ContentType": "application/zip"})
 
     # Return public URL
-    from urllib.parse import quote
-    public_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{quote(s3_key)}"
+    public_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{s3_key}"
     return public_url
 
 @app.post("/generate-images")
@@ -1747,8 +1746,7 @@ def update_zip_on_s3(zip_url: str, new_image_bytes: bytes, new_filename: str):
     s3.put_object(Bucket=S3_BUCKET, Key=zip_key, Body=zip_buffer_out.read(), ContentType="application/zip")
 
     # Return same public URL
-    from urllib.parse import quote
-    return f"https://{S3_BUCKET}.s3.amazonaws.com/{quote(zip_key)}"
+    return f"https://{S3_BUCKET}.s3.amazonaws.com/{zip_key}"
 
 @app.post("/regenerate-image")
 async def regenerate_image(
