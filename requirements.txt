@@ -5,6 +5,7 @@ streamlit
 pandas
 pillow
 python-dotenv
+playwright
 uvicorn
 chromadb
 pydantic
@@ -17,3 +18,9 @@ transformers
 boto3
 openpyxl
 torch
+openai
+google-api-core
+openpyxl
+streamlit
+pymilvus
+awscli
