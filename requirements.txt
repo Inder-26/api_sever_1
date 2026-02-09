@@ -18,3 +18,4 @@ boto3
 openpyxl
 rembg
 imagehash
+psycopg2-binary

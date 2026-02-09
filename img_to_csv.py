@@ -37,6 +37,12 @@ import time
 from openai_utils import *
 from json_storage import *
 
+# Phase 2: Product Catalog AI System
+from catalog_db import CatalogDB
+from catalog_pipeline import CatalogPipeline
+from catalog_worker import CatalogWorker
+from catalog_routes import router as catalog_router, init_catalog_routes
+
 app = FastAPI()
 load_dotenv()
 app.add_middleware(
@@ -48,6 +54,9 @@ app.add_middleware(
 )
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Phase 2: Register catalog routes
+app.include_router(catalog_router)
 
 
 API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -73,6 +82,26 @@ collection_db = init_milvus(
     collection_name=os.getenv("COLLECTION_NAME", "image_embeddings_ip")
 )
 
+# Phase 2: Initialize Catalog system
+catalog_db_inst = None
+catalog_pipeline = None
+catalog_worker = None
+try:
+    catalog_db_inst = CatalogDB()
+    catalog_pipeline = CatalogPipeline(
+        db=catalog_db_inst,
+        clip_model=clipmodel,
+        processor=processor,
+        device=device,
+        s3_client=s3,
+    )
+    catalog_worker = CatalogWorker(pipeline=catalog_pipeline)
+    init_catalog_routes(catalog_db_inst, catalog_pipeline, catalog_worker, s3, BUCKET_MAP)
+    print("[Phase 2] Catalog system initialized successfully")
+except Exception as e:
+    print(f"[Phase 2] WARNING: Catalog system init failed: {e}")
+    print("[Phase 2] Catalog endpoints will not be available")
+
 # Flag to control whether to run full S3 indexing on startup
 REINDEX_ON_STARTUP = os.getenv("REINDEX_ON_STARTUP", "false").lower() == "true"
 # Flag to clean orphan entries from Milvus (fixes "unknown" path issue)
@@ -96,6 +125,18 @@ async def startup_event():
 
     if not CLEAN_ORPHANS_ON_STARTUP and not REINDEX_ON_STARTUP:
         print("Skipping startup tasks (set CLEAN_ORPHANS_ON_STARTUP=true or REINDEX_ON_STARTUP=true to enable)")
+
+    # Phase 2: Start background worker
+    if catalog_worker is not None:
+        catalog_worker.start_worker_loop(poll_interval=2.0)
+        catalog_worker.start_timeout_monitor(check_interval=120.0)
+        print("[Phase 2] Background worker and timeout monitor started")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    if catalog_db_inst is not None:
+        catalog_db_inst.close()
+        print("[Phase 2] Catalog DB connection pool closed")
 
 gl=None
 
@@ -504,18 +545,69 @@ async def generate_caption(
         s3_url = ""
         original_name = ""
 
-        # Only perform duplicate check if check_duplicate is "yes"
-        if check_duplicate.lower() == "yes":
-            paths = get_image_paths_from_s3(S3_BUCKET)
+        # Phase 2: Catalog product matching (checks pHash + centroid)
+        if check_duplicate.lower() == "yes" and catalog_pipeline is not None:
+            try:
+                pil_img = Image.open(BytesIO(image_bytes)).convert("RGB")
+                phash = catalog_pipeline.calculate_phash(pil_img)
+                dup = catalog_pipeline.check_phash_duplicate(phash)
+                if dup:
+                    return {
+                        "display_name": file.filename,
+                        "s3_url": dup["s3_url"],
+                        "duplicate": "duplicate found",
+                        "product_id": dup["product_id"],
+                    }
 
-            # Step 1: Get query image
+                # Check centroid match
+                clip_emb = catalog_pipeline.extract_clip_embedding(pil_img)
+                color_hist = catalog_pipeline.extract_color_histogram(pil_img)
+                matches = catalog_pipeline.search_centroids(clip_emb, top_k=3)
+                if matches:
+                    top1 = matches[0]
+                    clip_sim = top1["clip_sim"]
+                    color_sim = catalog_pipeline.compare_color_histograms(
+                        color_hist, np.array(top1["color_hist"], dtype=np.float32)
+                    )
+                    top2_clip = matches[1]["clip_sim"] if len(matches) > 1 else 0
+                    gap = clip_sim - top2_clip
+                    decision = catalog_pipeline.decide(clip_sim, color_sim, gap)
+
+                    # Get existing product's first image URL
+                    existing_images = catalog_pipeline.db.get_images_for_product(top1["product_id"])
+                    existing_s3_url = existing_images[0]["s3_url"] if existing_images else ""
+
+                    if decision == "auto_merge":
+                        return {
+                            "display_name": file.filename,
+                            "s3_url": existing_s3_url,
+                            "duplicate": "same product found",
+                            "product_id": top1["product_id"],
+                            "clip_sim": round(clip_sim, 4),
+                            "color_sim": round(color_sim, 4),
+                            "gap": round(gap, 4),
+                        }
+                    elif decision == "review":
+                        return {
+                            "display_name": file.filename,
+                            "s3_url": existing_s3_url,
+                            "duplicate": "possible match — needs review",
+                            "suggested_product_id": top1["product_id"],
+                            "clip_sim": round(clip_sim, 4),
+                            "color_sim": round(color_sim, 4),
+                            "gap": round(gap, 4),
+                            "message": "Check /catalog/reviews to approve or reject",
+                        }
+                    # decision == "new_product" → continue to generate caption normally
+            except Exception as e:
+                print(f"[Phase 2] Catalog check failed (non-blocking): {e}")
+
+        # Legacy duplicate check (CLIP exact match via Milvus)
+        if check_duplicate.lower() == "yes":
             image_s = Image.open(BytesIO(image_bytes)).convert("RGB")
             query_emb = embed_image(image_s, clipmodel, processor, device)
-
-            # Step 2: Search similar
             results = search_similar(collection_db, query_emb, 1)
 
-            # Step 3: Load ID-to-path map
             int_hash_map_file = os.getenv("INT_HASH_MAP_FILE", "int_hash_to_path.json")
             try:
                 with open(int_hash_map_file, 'r') as f:
@@ -523,44 +615,26 @@ async def generate_caption(
             except Exception as e:
                 return JSONResponse(status_code=500, content={"error": f"Failed to load hash map: {str(e)}"})
 
-            # Step 4: Build response
-            matches = []
             for _id, dist in results:
-                print(f"[generate_caption] IP distance: {dist} (similarity: {(1-dist)*100:.2f}%)")
-                print()
-                if dist < 0.05:  # IP metric: 0.05 = ~95% similarity
+                if dist < 0.05:
                     path = id_to_path.get(str(_id), "unknown")
-                    matches.append({"id": _id, "distance": dist, "path": path})
+                    if path != "unknown":
+                        duplicate = True
+                        s3_url = path
+                        s3_key = s3_url.split("/")[-1]
+                        parts = s3_key.split("_")
+                        original_name = "_".join(parts[2:]) if len(parts) > 2 else s3_key
 
-            # Only treat as duplicate if we have a valid path (not "unknown")
-            if matches and matches[0]["path"] != "unknown":
-                duplicate = True
-                s3_url = matches[0]["path"]
-                # Extract S3 key from URL
-                s3_key = s3_url.split("/")[-1]
-                # Remove timestamp_uuid_ prefix if present
-                parts = s3_key.split("_")
-                if len(parts) > 2:
-                    original_name = "_".join(parts[2:])
-                else:
-                    original_name = s3_key
-        
-
-        # typ=json.loads(style)
         image=file
         image_name = image.filename
-        
-        # Create the path to save the file using the filename   
         save_path = f"./{image_name}"
-        
-        # Save the uploaded image directly to the disk
+
         with open(save_path, "wb") as f:
-            f.write(image_bytes)  # Write the image data to the file
+            f.write(image_bytes)
 
         if not duplicate:
             try:
                 timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
-                # Get file extension from original filename
                 file_ext = os.path.splitext(image_name)[1] or ".jpg"
                 unique_name = f"{timestamp}{file_ext}"
 
@@ -572,9 +646,23 @@ async def generate_caption(
                 )
                 index_single_image_from_s3(collection_db, unique_name, clipmodel, processor, device, s3_bucket=selected_bucket)
                 s3_url = f"https://{selected_bucket}.s3.amazonaws.com/{unique_name}"
+
+                # Phase 2: Register as new product in catalog
+                if catalog_pipeline is not None:
+                    try:
+                        pil_img = Image.open(BytesIO(image_bytes)).convert("RGB")
+                        phash = catalog_pipeline.calculate_phash(pil_img)
+                        clip_emb = catalog_pipeline.extract_clip_embedding(pil_img)
+                        color_hist = catalog_pipeline.extract_color_histogram(pil_img)
+                        catalog_pipeline._create_new_product(
+                            s3_url, clip_emb, color_hist, phash, None
+                        )
+                    except Exception as e:
+                        print(f"[Phase 2] Catalog registration failed (non-blocking): {e}")
+
             except Exception as e:
                 return JSONResponse(status_code=500, content={"error": f"Failed to upload to S3: {str(e)}"})
-        
+
         if duplicate:
             return {
                 "display_name": original_name,
@@ -771,6 +859,54 @@ async def image_searh(
     except Exception as e:
         return JSONResponse(status_code=400, content={"error": f"Invalid image: {str(e)}"})
 
+    # Phase 2: Catalog product matching
+    if check_duplicate.lower() == "yes" and catalog_pipeline is not None:
+        try:
+            phash = catalog_pipeline.calculate_phash(image)
+            dup = catalog_pipeline.check_phash_duplicate(phash)
+            if dup:
+                return {
+                    "duplicate_found": True,
+                    "catalog_match": "phash_duplicate",
+                    "product_id": dup["product_id"],
+                    "s3_url": dup["s3_url"],
+                }
+
+            clip_emb = catalog_pipeline.extract_clip_embedding(image)
+            color_hist = catalog_pipeline.extract_color_histogram(image)
+            centroid_matches = catalog_pipeline.search_centroids(clip_emb, top_k=3)
+            if centroid_matches:
+                top1 = centroid_matches[0]
+                clip_sim = top1["clip_sim"]
+                color_sim = catalog_pipeline.compare_color_histograms(
+                    color_hist, np.array(top1["color_hist"], dtype=np.float32)
+                )
+                top2_clip = centroid_matches[1]["clip_sim"] if len(centroid_matches) > 1 else 0
+                gap = clip_sim - top2_clip
+                decision = catalog_pipeline.decide(clip_sim, color_sim, gap)
+
+                if decision == "auto_merge":
+                    return {
+                        "duplicate_found": True,
+                        "catalog_match": "auto_merge",
+                        "product_id": top1["product_id"],
+                        "clip_sim": round(clip_sim, 4),
+                        "color_sim": round(color_sim, 4),
+                        "gap": round(gap, 4),
+                    }
+                elif decision == "review":
+                    return {
+                        "duplicate_found": False,
+                        "catalog_match": "review",
+                        "suggested_product_id": top1["product_id"],
+                        "clip_sim": round(clip_sim, 4),
+                        "color_sim": round(color_sim, 4),
+                        "gap": round(gap, 4),
+                        "message": "Uncertain match — check /catalog/reviews after upload",
+                    }
+        except Exception as e:
+            print(f"[Phase 2] Catalog check failed (non-blocking): {e}")
+
     # If check_duplicate is "no", skip similarity search and upload directly
     if check_duplicate.lower() == "no":
         image_name = file.filename
@@ -780,7 +916,6 @@ async def image_searh(
 
         try:
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
-            # Get file extension from original filename
             file_ext = os.path.splitext(image_name)[1] or ".jpg"
             unique_name = f"{timestamp}{file_ext}"
 
@@ -806,10 +941,9 @@ async def image_searh(
 
     query_emb = embed_image(image, clipmodel, processor, device)
 
-    # Step 2: Search similar
+    # Legacy: Search similar in image_embeddings_ip
     results = search_similar(collection_db, query_emb, top_k)
 
-    # Step 3: Load ID-to-path map
     int_hash_map_file = os.getenv("INT_HASH_MAP_FILE", "int_hash_to_path.json")
     try:
         with open(int_hash_map_file, 'r') as f:
@@ -817,34 +951,28 @@ async def image_searh(
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": f"Failed to load hash map: {str(e)}"})
 
-    # Step 4: Check for duplicates (IP metric: dist < 0.05 = ~95% similarity)
     matches = []
     for _id, dist in results:
-        print(f"[image_similarity_search] IP distance: {dist} (similarity: {(1-dist)*100:.2f}%)")
-        if dist < 0.05:  # IP metric: 0.05 = ~95% similarity
+        if dist < 0.05:
             path = id_to_path.get(str(_id), "unknown")
-            # Only count as duplicate if path is valid (not "unknown")
             if path != "unknown":
                 matches.append({"id": _id, "distance": dist, "path": path})
 
-    # Step 5: If duplicate found, return match info (don't upload)
     if matches:
         return {
             "duplicate_found": True,
             "results": matches
         }
 
-    # Step 6: No duplicate - upload new image to S3 and index it
+    # No duplicate — upload new image to S3 and index
     image_name = file.filename
     save_path = f"./{image_name}"
 
-    # Save the uploaded image to disk temporarily
     with open(save_path, "wb") as f:
         f.write(image_bytes)
 
     try:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
-        # Get file extension from original filename
         file_ext = os.path.splitext(image_name)[1] or ".jpg"
         unique_name = f"{timestamp}{file_ext}"
 
