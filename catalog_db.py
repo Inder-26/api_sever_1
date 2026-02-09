@@ -305,6 +305,21 @@ class CatalogDB:
         finally:
             self._put_conn(conn)
 
+    # ── Bulk Queries ─────────────────────────────────────────────
+
+    def get_all_indexed_s3_urls(self) -> set:
+        """Return a set of all s3_url values already in product_images.
+        Used by backfill resume to skip already-processed images."""
+        conn = self._get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT s3_url FROM product_images WHERE is_active = TRUE"
+                )
+                return {row[0] for row in cur.fetchall()}
+        finally:
+            self._put_conn(conn)
+
     # ── Metrics ────────────────────────────────────────────────
 
     def get_metrics(self) -> dict:

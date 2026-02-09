@@ -219,15 +219,35 @@ class CatalogWorker:
 
     # ── Backfill ────────────────────────────────────────────────
 
-    def start_backfill(self, s3_keys: list, bucket: str, workers: int = 4) -> dict:
+    def start_backfill(
+        self, s3_keys: list, bucket: str, workers: int = 4, resume: bool = False
+    ) -> dict:
         """Start backfill of existing S3 images into the catalog.
-        Runs in background thread with parallel workers. Returns backfill status dict."""
+        Runs in background thread with parallel workers.
+        If resume=True, pre-filters already-indexed images so only unprocessed ones run.
+        """
         if self._backfill["status"] == "running":
             return {"error": "Backfill already running", **self._backfill}
+
+        # Pre-filter: remove images already in the catalog
+        skipped = 0
+        if resume:
+            logger.info("Resume mode: fetching already-indexed URLs from DB...")
+            indexed_urls = self.pipeline.db.get_all_indexed_s3_urls()
+            original_count = len(s3_keys)
+            s3_keys = [
+                k for k in s3_keys
+                if f"https://{bucket}.s3.amazonaws.com/{k}" not in indexed_urls
+            ]
+            skipped = original_count - len(s3_keys)
+            logger.info(
+                f"Resume: {skipped} already indexed, {len(s3_keys)} remaining to process"
+            )
 
         self._backfill = {
             "status": "running",
             "total": len(s3_keys),
+            "skipped_already_indexed": skipped,
             "processed": 0,
             "new_products": 0,
             "merged": 0,
@@ -236,9 +256,15 @@ class CatalogWorker:
             "failed": 0,
             "errors": [],
             "workers": workers,
+            "resumed": resume,
             "started_at": datetime.now(timezone.utc).isoformat(),
             "finished_at": None,
         }
+
+        if not s3_keys:
+            self._backfill["status"] = "completed"
+            self._backfill["finished_at"] = datetime.now(timezone.utc).isoformat()
+            return self._backfill
 
         self._backfill_stop = False
         bf_lock = threading.Lock()
@@ -250,6 +276,7 @@ class CatalogWorker:
             try:
                 s3_url = f"https://{bucket}.s3.amazonaws.com/{key}"
 
+                # Safety net: skip if somehow already indexed (e.g. race condition)
                 existing = self.pipeline.db.find_by_s3_url(s3_url)
                 if existing:
                     return "duplicate_skip"

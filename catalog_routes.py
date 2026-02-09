@@ -271,6 +271,33 @@ async def start_backfill(
     return result
 
 
+@router.post("/backfill/resume")
+async def resume_backfill(
+    website: str = Form("alya"),
+    exclude_catalog: str = Form("yes"),
+    workers: int = Form(4),
+):
+    """Resume a previously interrupted backfill.
+    Skips images already indexed in the catalog DB and only processes the rest.
+    """
+    from image_search_engine import get_image_paths_from_s3
+
+    bucket = _bucket_map.get(website.lower())
+    if not bucket:
+        raise HTTPException(400, f"Invalid website. Use: {list(_bucket_map.keys())}")
+
+    all_keys = get_image_paths_from_s3(bucket)
+
+    if exclude_catalog.lower() == "yes":
+        all_keys = [k for k in all_keys if not k.startswith("catalog/")]
+
+    if not all_keys:
+        return {"message": "No images found in bucket", "total": 0}
+
+    result = _worker.start_backfill(all_keys, bucket, workers=workers, resume=True)
+    return result
+
+
 @router.post("/backfill/stop")
 async def stop_backfill():
     """Stop a running backfill."""
