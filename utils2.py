@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import io
 import base64
+from typing import Optional
 import openpyxl
 from prompts import *
 import random
@@ -248,6 +249,51 @@ def composite_jewelry_on_background(
     return result
 
 
+def analyze_jewelry_vision(img_bytes: bytes) -> Optional[str]:
+    """
+    Use GPT-4o vision to analyze the jewelry image and return a detailed description.
+    This description is prepended to each generation prompt so the model knows
+    exactly what it's looking at (metal color, stone type, setting, design, etc.).
+
+    Returns None on failure — callers should handle gracefully.
+    """
+    try:
+        b64 = base64.b64encode(img_bytes).decode("utf-8")
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{b64}"},
+                        },
+                        {
+                            "type": "text",
+                            "text": (
+                                "Describe this jewelry item concisely for use in an image generation prompt. "
+                                "Include: metal color and finish (e.g. gold, silver, rose gold, oxidized), "
+                                "stone type and color if any (e.g. blue sapphire, white pearl, cubic zirconia), "
+                                "setting style (prong, bezel, pavé, dangling), "
+                                "shape and design (e.g. floral, geometric, teardrop, hoop), "
+                                "and any distinctive features. "
+                                "Keep it under 60 words. Do not start with 'The' or 'This'."
+                            ),
+                        },
+                    ],
+                }
+            ],
+            max_tokens=120,
+        )
+        desc = response.choices[0].message.content.strip()
+        print(f"[VISION] Jewelry description: {desc}")
+        return desc
+    except Exception as e:
+        print(f"[VISION] GPT-4o analysis failed: {e}")
+        return None
+
+
 def _generate_single_image(args):
     """
     Helper function to generate a single image (used for parallel execution).
@@ -326,11 +372,16 @@ def _generate_single_image(args):
 def generate_images_from_gpt(
     image: Image.Image,
     prompts: list[str],
-    size: str = "1024x1024"
+    size: str = "1024x1024",
+    jewelry_desc: Optional[str] = None,
 ):
     """
     Runs a single image with multiple prompts using gpt-image-1.5
     and returns structured responses.
+
+    If jewelry_desc is provided (from GPT-4o vision analysis), it is
+    prepended to each prompt as "JEWELRY REFERENCE: {desc}" so the model
+    knows exactly what it is editing.
 
     Uses PARALLEL execution for ~4x faster generation.
 
@@ -352,6 +403,11 @@ def generate_images_from_gpt(
     img_bytes = img_buffer.getvalue()
     prep_time = time.time() - prep_start
     print(f"[BATCH] Image preparation: {prep_time:.2f}s (size: {len(img_bytes)/1024:.1f} KB)")
+
+    # Prepend jewelry vision description to each prompt if available
+    if jewelry_desc:
+        prompts = [f"JEWELRY REFERENCE: {jewelry_desc}\n\n{p}" for p in prompts]
+        print(f"[BATCH] Vision description prepended to {len(prompts)} prompts")
 
     # Prepare arguments for parallel execution
     args_list = [

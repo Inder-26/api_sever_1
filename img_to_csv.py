@@ -30,7 +30,7 @@ import tempfile
 import re
 from prompts2 import *
 from utils2 import get_gemini_responses as gen_image_responses
-from utils2 import resize_img,resize_img2,generate_images_from_gpt
+from utils2 import resize_img,resize_img2,generate_images_from_gpt,analyze_jewelry_vision
 from urllib.parse import urlparse
 import zipfile
 import time
@@ -1613,12 +1613,14 @@ DEFAULT_EARRING_IMAGE_TYPES = [1, 2, 4, 5]  # White BG, Hand, Lifestyle, Model
 class ImageRequest(BaseModel):
     s3_urls: str
     product_type: str
+    use_vision: bool = True  # Run GPT-4o vision analysis to improve prompt quality
 
     class Config:
         schema_extra = {
             "example": {
                 "s3_urls": "https://alyaimg.s3.amazonaws.com/your_image.jpg",
-                "product_type": "ear"
+                "product_type": "ear",
+                "use_vision": True
             }
         }
 
@@ -1727,7 +1729,12 @@ async def generate_images(request: ImageRequest):
             except Exception as e:
                 return JSONResponse(status_code=400, content={"error": f"Failed to decode image from URL: {url}", "details": str(e)})
 
-            responses = generate_images_from_gpt(image, prompt_list)
+            # GPT-4o vision analysis — describes the jewelry so each prompt is context-aware
+            jewelry_desc = None
+            if request.use_vision:
+                jewelry_desc = analyze_jewelry_vision(response.content)
+
+            responses = generate_images_from_gpt(image, prompt_list, jewelry_desc=jewelry_desc)
             image_urls = []
             parsed = urlparse(url)
             filename_base = os.path.basename(parsed.path) 
