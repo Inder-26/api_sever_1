@@ -256,6 +256,10 @@ cluttered, busy background, artificial plants, hanging earrings
 dimension_prompt_template = """
 You are given a reference image of real earrings.
 
+INPUT IMAGE NOTE:
+The reference image shows TWO earrings side by side — the LEFT earring is the FRONT VIEW and
+the RIGHT earring is the BACK VIEW. Physical rulers may also be visible for scale.
+
 ABSOLUTE CONSTRAINT:
 The earrings must be IDENTICAL to the reference image.
 Do NOT redesign, reinterpret, stylize, or alter the earrings in any way.
@@ -268,16 +272,24 @@ Preserve exactly:
 - Accurate scale and symmetry
 
 TASK:
-Create a high-resolution, photorealistic product image showing the earrings with clear dimension markings.
+Create a high-resolution, photorealistic product image showing a PAIR of earrings (both FRONT VIEW,
+use the left earring from the reference) with clear dimension measurement lines.
+
+EARRING DISPLAY:
+- Show TWO earrings (the pair, both front view) centered together in the middle of the image
+- Both earrings upright, clearly separated, natural contact shadow below
 
 DIMENSION DISPLAY:
-- Show HEIGHT dimension: {height}
-- Show WIDTH dimension: {width}
-- Use clean, thin black lines with arrows at both ends for measurement indicators
-- Place dimension lines slightly outside the earring edges (not overlapping the jewelry)
-- Add small text labels showing the measurements in a clean, professional font
-- Height line should be vertical on the left or right side
-- Width line should be horizontal at the top or bottom
+- HEIGHT: {height} — draw a vertical bracket line on the LEFT side of the earring pair
+  * A vertical line from the very TOP of the earring to the very BOTTOM
+  * Small horizontal tick marks at both ends (T-shape)
+  * Label "{height}" to the left of the bracket line in clean black text
+- WIDTH: {width} — draw a horizontal bracket line BELOW just ONE earring (the left one)
+  * A horizontal line spanning the full WIDTH of that single earring at its widest point
+  * Small vertical tick marks at both ends
+  * Label "{width}" below the bracket line in clean black text
+- Lines are thin (1-2px), black, professional — do NOT overlap the earrings
+- Font: clean sans-serif, small, black
 
 BACKGROUND:
 Pure white (#FFFFFF), seamless, uniform background.
@@ -388,7 +400,8 @@ hair covering the ear or earring;
 props, hands, or lifestyle objects;
 text, logos, borders, or watermarks;
 blur, noise, artifacts, color shift, or overexposure;
-multiple people or multiple ears in frame.
+multiple people or multiple ears in frame;
+any hanging thread, string, wire, or photography prop — show only the earring hook/clasp at the top.
 
 OUTPUT:
 Generate only the final polished image.
@@ -697,19 +710,79 @@ negative prompt - dont change the design of the bracelet each detail should rema
 """
 
 
+front_back_labels_prompt = """
+You are given a reference image of real earrings.
+
+INPUT IMAGE NOTE:
+The reference image shows TWO earrings side by side — the LEFT earring is the FRONT VIEW and
+the RIGHT earring is the BACK VIEW. Physical rulers may also be visible for scale.
+
+ABSOLUTE CONSTRAINT:
+The earrings must be IDENTICAL to the reference image.
+Do NOT redesign, reinterpret, stylize, or alter the earrings in any way.
+
+Preserve exactly:
+- Shape and silhouette
+- Metal thickness and curvature
+- Stone count, size, and placement
+- Hook / stud / clasp structure
+- Accurate scale and symmetry
+
+TASK:
+Create a high-resolution, photorealistic product image showing both earring views side by side
+with clear view labels.
+
+LAYOUT:
+- LEFT side: The FRONT view earring (taken from the left earring in the reference image)
+  * Centered in its half, upright, fully visible
+  * Text "FRONT" written in clean black uppercase sans-serif directly below the earring
+- RIGHT side: The BACK view earring (taken from the right earring in the reference image)
+  * Same size and position as the front view earring
+  * Text "BACK" written in clean black uppercase sans-serif directly below the earring
+- Both earrings at equal size, equal height, equal spacing from center
+- Soft natural shadow directly beneath each earring
+
+BACKGROUND:
+Pure white (#FFFFFF), seamless, uniform background.
+No gradients, textures, or environmental elements.
+
+LIGHTING:
+Professional e-commerce catalog lighting:
+- Soft, even illumination
+- Neutral white balance
+- Sharp focus on fine jewelry details
+
+IMAGE FIDELITY:
+- True-to-life metal reflections
+- Accurate gemstone clarity and color
+- Clean edges, no warping, no artifacts
+
+STRICTLY PROHIBITED:
+- Redesign or alteration of earrings
+- Display hooks, stands, jewelry trees, wires, strings, or any fixture attached to the earring
+- The earring's own clasp/stud back is part of the earring — do NOT add external hanging hardware
+- Rulers, measurement lines, or scale indicators
+- Extra text, logos, watermarks beyond the FRONT/BACK labels
+- Blur, distortion, or color cast
+
+OUTPUT:
+Generate only the final polished image. No explanations.
+"""
+
+
 # =============================================================================
 # AMAZON EARRINGS CATALOG IMAGE TYPES
 # =============================================================================
-# Image 1: White background (main product image)
-# Image 2: Hand holding earrings
-# Image 3: Dimension image (with height/width markings)
-# Image 4: Lifestyle - earrings hanging on stick with leaves
+# Image 1: White background, both earrings front view (main product image)
+# Image 3: Dimension image (with height/width bracket markings)
+# Image 4: Lifestyle - earrings with natural elements
 # Image 5: Model wearing earrings
+# Image 6: Front & Back view with labels
 
 EARRING_IMAGE_TYPES = {
     1: {
         "name": "White Background",
-        "description": "Pure white background - Amazon main product image",
+        "description": "Pure white background - both earrings front view, Amazon main product image",
         "prompt": white_bgd_prompt,
         "requires_dimensions": False
     },
@@ -721,13 +794,13 @@ EARRING_IMAGE_TYPES = {
     },
     3: {
         "name": "Dimension Image",
-        "description": "White background with height/width dimension markings",
+        "description": "White background with height/width bracket dimension markings",
         "prompt": dimension_prompt_template,
         "requires_dimensions": True
     },
     4: {
         "name": "Lifestyle Nature",
-        "description": "Earrings hanging on stick with leaves background",
+        "description": "Earrings with natural elements background",
         "prompt": lifestyle_nature_prompt,
         "requires_dimensions": False
     },
@@ -735,6 +808,12 @@ EARRING_IMAGE_TYPES = {
         "name": "Model Wearing",
         "description": "AI-generated model wearing the earrings",
         "prompt": model_wearing_prompt,
+        "requires_dimensions": False
+    },
+    6: {
+        "name": "Front and Back View",
+        "description": "Both views side by side with FRONT/BACK labels below each earring",
+        "prompt": front_back_labels_prompt,
         "requires_dimensions": False
     }
 }
@@ -756,7 +835,7 @@ def get_earring_prompt(image_type: int, height: str = None, width: str = None) -
         ValueError: If invalid image type or missing dimensions for type 3
     """
     if image_type not in EARRING_IMAGE_TYPES:
-        raise ValueError(f"Invalid image type: {image_type}. Must be 1-5.")
+        raise ValueError(f"Invalid image type: {image_type}. Must be one of {list(EARRING_IMAGE_TYPES.keys())}.")
 
     config = EARRING_IMAGE_TYPES[image_type]
     prompt = config["prompt"]
