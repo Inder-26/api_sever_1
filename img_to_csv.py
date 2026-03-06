@@ -36,6 +36,16 @@ import zipfile
 import time
 from openai_utils import *
 from json_storage import *
+from aplus_prompts import APLUS_BANNER_TYPES, get_aplus_banner_prompt
+from aplus_utils import (
+    generate_aplus_theme,
+    generate_aplus_banner_text,
+    get_default_banner_text,
+    create_aplus_generation_prompts,
+    validate_theme_dict,
+    validate_banner_text,
+    generate_model_wearing_banner
+)
 
 app = FastAPI()
 load_dotenv()
@@ -1607,8 +1617,8 @@ async def create_order(file: UploadFile = File(...)):
         "products_data": products_array
     } 
 
-# Default image types for earrings (skip type 3 dimension image)
-DEFAULT_EARRING_IMAGE_TYPES = [1, 2, 4, 5]  # White BG, Hand, Lifestyle, Model
+# Default image types for earrings: White BG pair, Model Wearing, Lifestyle, Front+Back labels, Dimension
+DEFAULT_EARRING_IMAGE_TYPES = [1, 5, 4, 6, 3]
 
 class ImageRequest(BaseModel):
     s3_urls: str
@@ -1689,32 +1699,6 @@ async def generate_images(request: ImageRequest):
     # Track image types for response
     image_types_list = None
 
-    # For earrings, use batch-4 generation with types [1,2,4,5]
-    if product_type == "ear":
-        # Always use default types [1,2,4,5] (skip type 3 dimension)
-        image_types = DEFAULT_EARRING_IMAGE_TYPES
-
-        # Build prompt list from image types
-        prompt_list = []
-        image_types_list = []
-        for img_type in image_types:
-            prompt = get_earring_prompt(img_type, None, None)
-            prompt_list.append(prompt)
-            image_types_list.append({
-                "type": img_type,
-                "name": EARRING_IMAGE_TYPES[img_type]["name"]
-            })
-    else:
-        # Fallback to original behavior for bracelet/necklace (4 images)
-        prompt_map = {
-            "bra": [white_bgd_bracelet_prompt, multicolor_1_bracelet_prompt, multicolor_2_bracelet_prompt, hand_bracelet_prompt],
-            "nec": [white_bgd_necklace_prompt, multicolor_1_necklace_prompt, multicolor_2_necklace_prompt, hand_necklace_prompt]
-        }
-
-        prompt_list = prompt_map.get(product_type)
-        if not prompt_list:
-            return JSONResponse(status_code=400, content={"error": "Invalid product_type. Use 'ear', 'bra', or 'nec'"})
-
     results = {}
     url = request.s3_urls
     async with httpx.AsyncClient() as client:
@@ -1734,7 +1718,45 @@ async def generate_images(request: ImageRequest):
             if request.use_vision:
                 jewelry_desc = analyze_jewelry_vision(response.content)
 
-            responses = generate_images_from_gpt(image, prompt_list, jewelry_desc=jewelry_desc)
+            # For earrings, detect dimensions then generate in two batches:
+            # - Types 1,5,4 use front-only crop (left half) → preserves original image quality
+            # - Types 6,3 use full combined image (need back view visible)
+            if product_type == "ear":
+                from aplus_utils import detect_earring_size_from_scale
+                size_info = detect_earring_size_from_scale(response.content)
+                height_str = f"{size_info['length_cm']} cm"
+                width_str = f"{size_info['width_cm']} cm"
+
+                # Crop to left half for types that only need front view
+                w, h = image.size
+                front_image = image.crop((0, 0, w // 2, h))
+
+                # Batch A: front-only types [1, 5, 4]
+                front_types = [1, 5, 4]
+                front_prompts = [get_earring_prompt(t, height=height_str, width=width_str) for t in front_types]
+
+                # Batch B: full-image types [6, 3]
+                full_types = [6, 3]
+                full_prompts = [get_earring_prompt(t, height=height_str, width=width_str) for t in full_types]
+
+                responses_front = generate_images_from_gpt(front_image, front_prompts, jewelry_desc=jewelry_desc)
+                responses_full = generate_images_from_gpt(image, full_prompts, jewelry_desc=jewelry_desc)
+
+                # Merge in display order [1,5,4,6,3] with type metadata
+                responses = responses_front + responses_full
+                image_types_list = [
+                    {"type": t, "name": EARRING_IMAGE_TYPES[t]["name"]} for t in front_types + full_types
+                ]
+            else:
+                # Fallback for bracelet/necklace
+                prompt_map = {
+                    "bra": [white_bgd_bracelet_prompt, multicolor_1_bracelet_prompt, multicolor_2_bracelet_prompt, hand_bracelet_prompt],
+                    "nec": [white_bgd_necklace_prompt, multicolor_1_necklace_prompt, multicolor_2_necklace_prompt, hand_necklace_prompt]
+                }
+                prompt_list = prompt_map.get(product_type)
+                if not prompt_list:
+                    return JSONResponse(status_code=400, content={"error": "Invalid product_type. Use 'ear', 'bra', or 'nec'"})
+                responses = generate_images_from_gpt(image, prompt_list, jewelry_desc=jewelry_desc)
             image_urls = []
             parsed = urlparse(url)
             filename_base = os.path.basename(parsed.path) 
@@ -2073,6 +2095,449 @@ async def get_number_of_offers(competitor_request: CompetitorRequest):
     else:
         raise HTTPException(status_code=400, detail="Marketplace not supported")
     
+
+
+# ============================================================================
+# AMAZON A+ BANNER GENERATION ENDPOINTS
+# ============================================================================
+
+@app.post("/generate_aplus_banners")
+async def generate_aplus_banners(request: ImageRequest):
+    """
+    Generate 4 A+ banners with a universal theme for Amazon catalog.
+
+    Process:
+    1. Fetch image from S3
+    2. Analyze earring with vision to get description
+    3. Generate universal theme applied to all 4 banners
+    4. Create 4 themed image generation prompts
+    5. Generate 4 banner images using GPT-4o vision
+    6. Upload to S3 in zip format
+
+    Request:
+        s3_urls: Full S3 URL to earring image (with scale showing front/back)
+        product_type: "ear" (same codes as /generate-images — only earrings supported for A+ currently)
+        use_vision: Whether to use vision analysis for theme generation
+
+    Response:
+        {
+            "status": "success",
+            "zip_url": "https://...",
+            "original_image_url": "https://...",
+            "theme": { theme dictionary },
+            "gen_images": [
+                {
+                    "prompt_index": 0,
+                    "image_type_name": "Hero Banner",
+                    "image_url": "https://...",
+                    "theme_line": "..."
+                },
+                ...
+            ]
+        }
+    """
+    try:
+        if request.product_type[0:3].lower() != "ear":
+            raise HTTPException(status_code=400, detail="Only earrings supported for A+")
+
+        # Fetch image from S3
+        async with httpx.AsyncClient() as client:
+            response = await client.get(request.s3_urls, timeout=30.0)
+            if response.status_code != 200:
+                raise HTTPException(status_code=400, detail="Failed to fetch image from S3")
+
+            image_bytes = response.content
+
+        # Extract filename base from URL (same as generate-images)
+        parsed = urlparse(request.s3_urls)
+        filename_base = os.path.basename(parsed.path)
+        name_no_ext = os.path.splitext(filename_base)[0]
+
+        # Convert bytes to PIL Image
+        pil_image = Image.open(io.BytesIO(image_bytes))
+
+        # Analyze earring with vision
+        earring_description = ""
+        if request.use_vision:
+            try:
+                earring_description = analyze_jewelry_vision(image_bytes)
+            except Exception as e:
+                print(f"Vision analysis failed: {e}. Continuing without description.")
+
+        # Generate universal theme
+        theme_dict = generate_aplus_theme(image_bytes)
+
+        if not validate_theme_dict(theme_dict):
+            theme_dict = {
+                "earring_style": "elegant earring",
+                "metal_tone": "gold",
+                "primary_colors": ["gold", "deep red"],
+                "mood": "royal festive",
+                "background_color": "#1a1a1a",
+                "background_description": "deep charcoal background",
+                "texture_pattern": "subtle damask texture",
+                "border_style": "ornate gold border",
+                "typography_color": "ivory",
+                "typography_style": "serif",
+                "lighting_mood": "warm amber spotlight",
+                "theme_line": "Deep charcoal #1a1a1a | damask | ornate gold | ivory serif | warm spotlight"
+            }
+
+        # Generate text for all 4 banners separately (precise control over wording)
+        print("[APLUS] Generating banner texts...")
+        banner_texts = {}
+        for i in range(4):
+            try:
+                banner_texts[i] = generate_aplus_banner_text(
+                    image_bytes, i, theme_dict, earring_description
+                )
+                print(f"[APLUS] Text for banner {i}: {banner_texts[i].get('heading', '')}")
+            except Exception as e:
+                print(f"[APLUS] Text generation failed for banner {i}: {e}")
+                banner_texts[i] = None
+
+        # Create 4 themed prompts with exact text injected
+        aplus_prompts = create_aplus_generation_prompts(theme_dict, earring_description, banner_texts)
+
+        # Generate banners 0, 2, 3 (Hero, Front&Back, Care Tips) in parallel
+        # Banner 1 (Model Wearing) uses two-step outpainting for exact earring
+        try:
+            other_prompts = [aplus_prompts[0], aplus_prompts[2], aplus_prompts[3]]
+            other_responses = generate_images_from_gpt(
+                pil_image,
+                other_prompts,
+                jewelry_desc=earring_description,
+                size="1536x1024"
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Image generation failed: {str(e)}")
+
+        # Generate Model Wearing banner via outpainting (exact earring + exact text)
+        model_wearing_bytes = generate_model_wearing_banner(
+            image_bytes, theme_dict, earring_description,
+            text_dict=banner_texts.get(1)
+        )
+
+        # If outpainting failed, fall back to standard generation for banner 1
+        if model_wearing_bytes is None:
+            print("[MODEL WEARING] Falling back to standard generation...")
+            try:
+                fallback = generate_images_from_gpt(
+                    pil_image,
+                    [aplus_prompts[1]],
+                    jewelry_desc=earring_description,
+                    size="1536x1024"
+                )
+                model_wearing_bytes = fallback[0]["images"][0] if fallback and fallback[0].get("images") else None
+            except Exception as e:
+                print(f"[MODEL WEARING] Fallback also failed: {e}")
+
+        # Reconstruct image_responses in correct order [0, 1, 2, 3]
+        image_responses = [
+            {**other_responses[0], "prompt_index": 0},  # Hero
+            {"prompt_index": 1, "images": [model_wearing_bytes] if model_wearing_bytes else []},  # Model Wearing
+            {**other_responses[1], "prompt_index": 2},  # Front & Back
+            {**other_responses[2], "prompt_index": 3},  # Care Tips
+        ]
+
+        # Process generated images
+        image_urls = []
+        urls_for_zip = []
+
+        for i, item in enumerate(image_responses):
+            if not item.get("images"):
+                print(f"[WARNING] Skipping A+ image {i} - generation failed: {item.get('error', 'unknown error')}")
+                continue
+
+            try:
+                img_bytes = item["images"][0]
+                gen_image = Image.open(io.BytesIO(img_bytes))
+
+                # Resize: fill 970px width, center-crop height to 600px
+                # No padding strips — since no border frame in prompts, edge cropping is safe
+                target_w, target_h = 970, 600
+                orig_w, orig_h = gen_image.size
+                scale = target_w / orig_w
+                new_h = int(orig_h * scale)
+                gen_image = gen_image.resize((target_w, new_h), Image.Resampling.LANCZOS)
+                if new_h > target_h:
+                    top = (new_h - target_h) // 2
+                    gen_image = gen_image.crop((0, top, target_w, top + target_h))
+                elif new_h < target_h:
+                    top = (target_h - new_h) // 2
+                    padded = Image.new("RGB", (target_w, target_h), (0, 0, 0))
+                    padded.paste(gen_image, (0, top))
+                    gen_image = padded
+
+                img_buffer = io.BytesIO()
+                gen_image.save(img_buffer, format="PNG")
+                resized_img_bytes = img_buffer.getvalue()
+
+                # Use same filename pattern as generate-images
+                filename = f"{name_no_ext}_aplus{i+1}.png"
+                img_key = f"{GENERATED_FOLDER}{filename}"
+                s3.put_object(
+                    Bucket=S3_BUCKET,
+                    Key=img_key,
+                    Body=resized_img_bytes,
+                    ContentType="image/png"
+                )
+
+                img_url = f"https://{S3_BUCKET}.s3.amazonaws.com/{img_key}"
+
+                image_urls.append({
+                    "prompt_index": i,
+                    "image_type_name": APLUS_BANNER_TYPES[i]["name"],
+                    "image_url": img_url
+                })
+
+                urls_for_zip.append(img_url)
+
+            except Exception as e:
+                print(f"Error processing A+ image {i}: {e}")
+                continue
+
+        if urls_for_zip:
+            zip_url = create_zip_from_s3_urls(
+                urls_for_zip,
+                f"{name_no_ext}_aplus.zip"
+            )
+        else:
+            zip_url = None
+
+        return {
+            "zip_url": zip_url,
+            "original_image_url": request.s3_urls,
+            "gen_images": image_urls
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"A+ banner generation failed: {str(e)}")
+
+
+# ============================================================================
+# REGENERATE SINGLE A+ BANNER
+# ============================================================================
+
+@app.post("/regenerate_aplus_banner")
+async def regenerate_aplus_banner(
+    original_image_url: str = Form(...),
+    old_generated_url: str = Form(...),
+    old_zip_url: str = Form(...),
+    product_type: str = Form(...),
+    prompt_index: int = Form(...)
+):
+    """
+    Regenerate a single A+ banner, replacing the old one in S3 and updating the zip.
+
+    Args:
+        original_image_url: S3 URL of the original earring image (combined front+back with ruler)
+        old_generated_url: S3 URL of the old generated banner to replace
+        old_zip_url: S3 URL of the existing A+ zip file to update
+        product_type: "ear"
+        prompt_index: 0=Hero, 1=Model Wearing, 2=Front&Back, 3=Care Tips
+
+    Returns:
+        {"image_url": old_generated_url, "zip_url": updated_zip_url}
+    """
+    if product_type[0:3].lower() != "ear":
+        raise HTTPException(status_code=400, detail="Only earrings supported for A+")
+
+    if prompt_index not in range(4):
+        raise HTTPException(status_code=400, detail="prompt_index must be 0 (Hero), 1 (Model Wearing), 2 (Front & Back), or 3 (Care Tips)")
+
+    # Download original image
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(original_image_url, timeout=30.0)
+            response.raise_for_status()
+            image_bytes = response.content
+            pil_image = Image.open(io.BytesIO(image_bytes))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to download original image: {e}")
+
+    # Delete old banner from S3
+    try:
+        parsed = urlparse(old_generated_url)
+        old_key = parsed.path.lstrip("/")
+        s3.delete_object(Bucket=S3_BUCKET, Key=old_key)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete old banner: {e}")
+
+    # Generate theme + text for this banner
+    earring_description = ""
+    try:
+        earring_description = analyze_jewelry_vision(image_bytes)
+    except Exception as e:
+        print(f"Vision analysis failed: {e}")
+
+    theme_dict = generate_aplus_theme(image_bytes)
+    if not validate_theme_dict(theme_dict):
+        theme_dict = {
+            "earring_style": "elegant earring", "metal_tone": "gold",
+            "primary_colors": ["gold", "deep red"], "mood": "royal festive",
+            "background_color": "#1a1a1a", "background_description": "deep charcoal background",
+            "texture_pattern": "subtle damask texture", "border_style": "ornate gold border",
+            "typography_color": "ivory", "typography_style": "serif",
+            "lighting_mood": "warm amber spotlight",
+            "theme_line": "Deep charcoal #1a1a1a | damask | ornate gold | ivory serif | warm spotlight"
+        }
+
+    try:
+        banner_text = generate_aplus_banner_text(image_bytes, prompt_index, theme_dict, earring_description)
+        if not validate_banner_text(banner_text):
+            print(f"[APLUS REGEN] Invalid banner text, using default")
+            banner_text = get_default_banner_text(prompt_index, theme_dict)
+    except Exception as e:
+        print(f"[APLUS REGEN] Text generation failed: {e}, using default")
+        banner_text = get_default_banner_text(prompt_index, theme_dict)
+
+    print(f"[APLUS REGEN] Banner text heading: {banner_text.get('heading', '')}")
+    aplus_prompts = create_aplus_generation_prompts(theme_dict, earring_description, {prompt_index: banner_text})
+
+    # Generate the banner
+    if prompt_index == 1:
+        img_bytes = generate_model_wearing_banner(
+            image_bytes, theme_dict, earring_description, text_dict=banner_text
+        )
+        if img_bytes is None:
+            fallback = generate_images_from_gpt(pil_image, [aplus_prompts[1]], jewelry_desc=earring_description, size="1536x1024")
+            img_bytes = fallback[0]["images"][0] if fallback and fallback[0].get("images") else None
+    else:
+        responses = generate_images_from_gpt(pil_image, [aplus_prompts[prompt_index]], jewelry_desc=earring_description, size="1536x1024")
+        img_bytes = responses[0]["images"][0] if responses and responses[0].get("images") else None
+
+    if not img_bytes:
+        raise HTTPException(status_code=500, detail=f"Banner {prompt_index} generation failed")
+
+    # Resize to 970×600
+    gen_image = Image.open(io.BytesIO(img_bytes))
+    target_w, target_h = 970, 600
+    scale = target_w / gen_image.width
+    new_h = int(gen_image.height * scale)
+    gen_image = gen_image.resize((target_w, new_h), Image.Resampling.LANCZOS)
+    if new_h > target_h:
+        top = (new_h - target_h) // 2
+        gen_image = gen_image.crop((0, top, target_w, top + target_h))
+
+    img_buffer = io.BytesIO()
+    gen_image.save(img_buffer, format="PNG")
+    resized_img_bytes = img_buffer.getvalue()
+
+    filename = os.path.basename(parsed.path)
+    updated_zip_url = update_zip_on_s3(old_zip_url, resized_img_bytes, filename)
+
+    # Upload new banner to same S3 path
+    try:
+        s3.put_object(Bucket=S3_BUCKET, Key=old_key, Body=resized_img_bytes, ContentType="image/png")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload new banner: {e}")
+
+    return {"image_url": old_generated_url, "zip_url": updated_zip_url}
+
+
+@app.post("/get_aplus_banner_text")
+async def get_aplus_banner_text(
+    s3_urls: str = Form(...),
+    product_type: str = Form(default="earrings"),
+    use_vision: bool = Form(default=True),
+    prompt_index: int = Form(default=0),
+    theme: Optional[str] = Form(default=None)
+):
+    """
+    Generate dynamic text content for a specific A+ banner.
+
+    Request:
+        s3_urls: Full S3 URL to earring image
+        product_type: "earrings"
+        use_vision: Whether to analyze image for text generation
+        prompt_index: 0=Hero, 1=Model Wearing, 2=Front & Back, 3=Care Tips
+        theme: Optional pre-generated theme JSON string
+
+    Response:
+        {
+            "status": "success",
+            "prompt_index": 0,
+            "image_type_name": "Hero Banner",
+            "heading": "Text...",
+            "subheading": "Text...",
+            "bullets": ["Item 1", "Item 2", "Item 3"],
+            "theme_line": "..."
+        }
+    """
+    try:
+        if product_type.lower() != "earrings":
+            raise HTTPException(status_code=400, detail="Only earrings supported for A+")
+
+        if prompt_index not in [0, 1, 2, 3]:
+            raise HTTPException(status_code=400, detail="prompt_index must be 0-3")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(s3_urls, timeout=30.0)
+            if response.status_code != 200:
+                raise HTTPException(status_code=400, detail="Failed to fetch image from S3")
+
+            image_bytes = response.content
+
+        if theme:
+            try:
+                theme_dict = json.loads(theme)
+            except:
+                theme_dict = None
+        else:
+            theme_dict = None
+
+        if not theme_dict or not validate_theme_dict(theme_dict):
+            theme_dict = generate_aplus_theme(image_bytes)
+
+        earring_description = ""
+        if use_vision:
+            try:
+                earring_description = analyze_jewelry_vision(image_bytes)
+            except Exception as e:
+                print(f"Vision analysis failed: {e}")
+
+        text_dict = generate_aplus_banner_text(
+            image_bytes,
+            prompt_index,
+            theme_dict,
+            earring_description
+        )
+
+        if not validate_banner_text(text_dict):
+            from aplus_utils import get_default_banner_text
+            text_dict = get_default_banner_text(prompt_index, theme_dict)
+
+        return {
+            "status": "success",
+            "prompt_index": text_dict["prompt_index"],
+            "image_type_name": text_dict["image_type_name"],
+            "heading": text_dict["heading"],
+            "subheading": text_dict["subheading"],
+            "bullets": text_dict["bullets"],
+            "theme_line": theme_dict.get("theme_line", "")
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Text generation failed: {str(e)}")
+
+
+@app.get("/aplus_banner_types")
+async def get_aplus_banner_types():
+    """Get list of available A+ banner types."""
+    banner_types = [
+        {
+            "index": i,
+            "name": APLUS_BANNER_TYPES[i]["real_name"],
+            "description": APLUS_BANNER_TYPES[i]["description"]
+        }
+        for i in range(4)
+    ]
+    return {"banner_types": banner_types}
 
 
 if __name__ == "__main__":
