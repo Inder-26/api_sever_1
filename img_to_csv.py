@@ -1891,22 +1891,31 @@ async def regenerate_image(
         dict: A dictionary containing the same original image URL, the new generated image URL,
         and the updated ZIP file URL.
     """
-    prompt_map = {
-        "ear": [white_bgd_prompt, multicolor_1_prompt, multicolor_2_prompt, props_img_prompt, hand_prompt],
+    # Earring prompt order matches /generate-images output: [type1, type5, type4, type6, type3]
+    EAR_TYPE_ORDER = [1, 5, 4, 6, 3]
+
+    non_ear_prompt_map = {
         "bra": [white_bgd_bracelet_prompt, multicolor_1_bracelet_prompt, multicolor_2_bracelet_prompt, props_img_bracelet_prompt, hand_bracelet_prompt],
         "nec": [white_bgd_necklace_prompt, multicolor_1_necklace_prompt, multicolor_2_necklace_prompt, props_img_necklace_prompt, hand_necklace_prompt, neck_necklace_prompt]
     }
 
-    prompts = prompt_map.get(product_type[0:3].lower())
-    if not prompts or not (0 <= prompt_index < len(prompts)):
-        raise HTTPException(400, "Invalid product_type or prompt_index")
+    ptype = product_type[0:3].lower()
+
+    if ptype == "ear":
+        if not (0 <= prompt_index < len(EAR_TYPE_ORDER)):
+            raise HTTPException(400, "Invalid prompt_index for earrings. Must be 0-4.")
+    else:
+        prompts = non_ear_prompt_map.get(ptype)
+        if not prompts or not (0 <= prompt_index < len(prompts)):
+            raise HTTPException(400, "Invalid product_type or prompt_index")
 
     # 2. Download original image from S3 URL
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(original_image_url)
             response.raise_for_status()
-            image = Image.open(io.BytesIO(response.content))
+            image_bytes_raw = response.content
+            image = Image.open(io.BytesIO(image_bytes_raw))
     except Exception as e:
         raise HTTPException(400, f"Failed to download original image: {e}")
 
@@ -1919,10 +1928,32 @@ async def regenerate_image(
         raise HTTPException(500, f"Failed to delete old image: {e}")
 
     # 4. Generate new image
-    new_response = gen_image_responses("analyse the image", image, [prompts[prompt_index]])[0]
-    img_bytes = new_response["images"][0]
-    gen_image = Image.open(io.BytesIO(img_bytes))
-    gen_image = resize_img(gen_image)
+    if ptype == "ear":
+        from aplus_utils import detect_earring_size_from_scale
+        img_type = EAR_TYPE_ORDER[prompt_index]
+        size_info = detect_earring_size_from_scale(image_bytes_raw)
+        height_str = f"{size_info['length_cm']} cm"
+        width_str = f"{size_info['width_cm']} cm"
+        ear_prompt = get_earring_prompt(img_type, height=height_str, width=width_str)
+
+        # Types 1,5,4 use front-only crop; types 6,3 use full image
+        if img_type in [1, 5, 4]:
+            w, h = image.size
+            gen_image_input = image.crop((0, 0, w // 2, h))
+        else:
+            gen_image_input = image
+
+        responses = generate_images_from_gpt(gen_image_input, [ear_prompt])
+        img_bytes = responses[0]["images"][0] if responses and responses[0].get("images") else None
+        if not img_bytes:
+            raise HTTPException(500, "Image regeneration failed")
+        gen_image = Image.open(io.BytesIO(img_bytes))
+        gen_image = resize_img(gen_image)
+    else:
+        new_response = gen_image_responses("analyse the image", image, [prompts[prompt_index]])[0]
+        img_bytes = new_response["images"][0]
+        gen_image = Image.open(io.BytesIO(img_bytes))
+        gen_image = resize_img(gen_image)
 
     img_buffer = io.BytesIO()
     gen_image.save(img_buffer, format="PNG")
